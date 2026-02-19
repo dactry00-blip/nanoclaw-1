@@ -133,9 +133,24 @@ function buildVolumeMounts(
     '.claude',
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true, mode: 0o777 });
+  // Pre-create debug directory for Claude Agent SDK debug logs
+  fs.mkdirSync(path.join(groupSessionsDir, 'debug'), { recursive: true, mode: 0o777 });
   // Ensure directory is writable by container's node user (uid 1000)
   // which differs from the host user on some Linux setups
   try { fs.chmodSync(groupSessionsDir, 0o777); } catch { /* best effort */ }
+  try { fs.chmodSync(path.join(groupSessionsDir, 'debug'), 0o777); } catch { /* best effort */ }
+
+  // Copy host credentials.json into group session dir so Claude CLI
+  // can authenticate inside the container (it reads ~/.claude/.credentials.json)
+  const hostCredentials = path.join(getHomeDir(), '.claude', '.credentials.json');
+  const containerCredentials = path.join(groupSessionsDir, '.credentials.json');
+  try {
+    if (fs.existsSync(hostCredentials)) {
+      fs.copyFileSync(hostCredentials, containerCredentials);
+      fs.chmodSync(containerCredentials, 0o666);
+    }
+  } catch { /* best effort */ }
+
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   if (!fs.existsSync(settingsFile)) {
     fs.writeFileSync(settingsFile, JSON.stringify({
@@ -170,7 +185,7 @@ function buildVolumeMounts(
     }
   }
   // Ensure the sessions dir tree is writable by container's node user (uid 1000)
-  try { execSync(`chmod -R a+rwX "${groupSessionsDir}"`, { stdio: 'pipe' }); } catch { /* best effort */ }
+  try { execSync(`sudo chmod -R a+rwX "${groupSessionsDir}"`, { stdio: 'pipe' }); } catch { /* best effort */ }
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
@@ -186,6 +201,24 @@ function buildVolumeMounts(
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
+    readonly: false,
+  });
+
+  // Mount host's .claude.json so Claude CLI can write config inside the container.
+  // Without this, CLI silently fails due to EACCES on /home/node/.claude.json.
+  const hostClaudeJson = path.join(getHomeDir(), '.claude.json');
+  const groupClaudeJson = path.join(DATA_DIR, 'sessions', group.folder, '.claude.json');
+  try {
+    if (fs.existsSync(hostClaudeJson)) {
+      fs.copyFileSync(hostClaudeJson, groupClaudeJson);
+    } else {
+      fs.writeFileSync(groupClaudeJson, '{}');
+    }
+    fs.chmodSync(groupClaudeJson, 0o666);
+  } catch { /* best effort */ }
+  mounts.push({
+    hostPath: groupClaudeJson,
+    containerPath: '/home/node/.claude.json',
     readonly: false,
   });
 

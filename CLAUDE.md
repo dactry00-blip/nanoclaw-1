@@ -4,22 +4,25 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in Apple Container (Linux VMs). Each group has isolated filesystem and memory.
+Single Node.js process that connects to Slack (or WhatsApp), routes messages to Claude Agent SDK running in Docker containers. Each group has isolated filesystem and memory. Authentication uses Claude Pro OAuth tokens auto-refreshed from `~/.claude/.credentials.json`.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Orchestrator: state, message loop, agent invocation |
+| `src/channels/slack.ts` | Slack connection (Socket Mode), send/receive, typing indicator |
 | `src/channels/whatsapp.ts` | WhatsApp connection, auth, send/receive |
-| `src/ipc.ts` | IPC watcher and task processing |
+| `src/oauth-refresh.ts` | OAuth token auto-refresh from `~/.claude/.credentials.json` |
+| `src/container-runner.ts` | Spawns Docker containers with mounts, passes secrets via stdin |
+| `src/config.ts` | Trigger pattern, paths, intervals (POLL_INTERVAL=500ms) |
 | `src/router.ts` | Message formatting and outbound routing |
-| `src/config.ts` | Trigger pattern, paths, intervals |
-| `src/container-runner.ts` | Spawns agent containers with mounts |
+| `src/ipc.ts` | IPC watcher and task processing |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |
+| `src/group-queue.ts` | Per-group message queue with concurrency control |
+| `container/agent-runner/src/index.ts` | Agent runner inside container (Claude Agent SDK) |
 | `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
-| `container/skills/agent-browser.md` | Browser automation tool (available to all agents via Bash) |
 
 ## Skills
 
@@ -39,19 +42,27 @@ npm run build        # Compile TypeScript
 ./container/build.sh # Rebuild agent container
 ```
 
-Service management:
+Service management (Linux):
 ```bash
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+sudo systemctl start docker
 ```
 
 ## Container Build Cache
 
-Apple Container's buildkit caches the build context aggressively. `--no-cache` alone does NOT invalidate COPY steps — the builder's volume retains stale files. To force a truly clean rebuild:
+To force a truly clean rebuild:
 
 ```bash
-container builder stop && container builder rm && container builder start
+docker builder prune -af
 ./container/build.sh
 ```
 
-Always verify after rebuild: `container run -i --rm --entrypoint wc nanoclaw-agent:latest -l /app/src/index.ts`
+Always verify after rebuild: `docker run -i --rm --entrypoint wc nanoclaw-agent:latest -l /app/src/index.ts`
+
+## Critical: Container Authentication
+
+Claude CLI inside containers requires TWO things to work:
+1. `CLAUDE_CODE_OAUTH_TOKEN` env var passed via SDK `env` option
+2. `~/.claude.json` writable at `/home/node/.claude.json` (mounted from host)
+3. `~/.claude/.credentials.json` copied into container's `/home/node/.claude/`
+
+Without `.claude.json` mount, CLI silently exits with 0 messages and no error.
