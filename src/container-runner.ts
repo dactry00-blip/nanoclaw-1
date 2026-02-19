@@ -1,8 +1,8 @@
 /**
  * Container Runner for NanoClaw
- * Spawns agent execution in Apple Container and handles IPC
+ * Spawns agent execution in Docker container and handles IPC
  */
-import { ChildProcess, exec, spawn } from 'child_process';
+import { ChildProcess, exec, execSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -17,12 +17,37 @@ import {
 } from './config.js';
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
+import { ensureFreshToken } from './oauth-refresh.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+
+/**
+ * Pre-warm the Docker container image by running a no-op container at startup.
+ * This pulls the image layers into Docker's cache and pre-loads the runtime,
+ * reducing first-container startup from ~7-8s to ~2-3s.
+ */
+export function prewarmContainer(): void {
+  logger.info('Pre-warming container image...');
+  const child = spawn('docker', [
+    'run', '--rm', '--entrypoint', 'true', CONTAINER_IMAGE,
+  ], { stdio: 'pipe' });
+
+  child.on('close', (code) => {
+    if (code === 0) {
+      logger.info('Container image pre-warmed successfully');
+    } else {
+      logger.warn({ code }, 'Container pre-warm exited with non-zero code');
+    }
+  });
+
+  child.on('error', (err) => {
+    logger.warn({ err }, 'Container pre-warm failed');
+  });
+}
 
 function getHomeDir(): string {
   const home = process.env.HOME || os.homedir();
@@ -88,7 +113,7 @@ function buildVolumeMounts(
     });
 
     // Global memory directory (read-only for non-main)
-    // Apple Container only supports directory mounts, not file mounts
+    // Docker bind mounts work with both files and directories
     const globalDir = path.join(GROUPS_DIR, 'global');
     if (fs.existsSync(globalDir)) {
       mounts.push({
@@ -107,7 +132,10 @@ function buildVolumeMounts(
     group.folder,
     '.claude',
   );
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
+  fs.mkdirSync(groupSessionsDir, { recursive: true, mode: 0o777 });
+  // Ensure directory is writable by container's node user (uid 1000)
+  // which differs from the host user on some Linux setups
+  try { fs.chmodSync(groupSessionsDir, 0o777); } catch { /* best effort */ }
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   if (!fs.existsSync(settingsFile)) {
     fs.writeFileSync(settingsFile, JSON.stringify({
@@ -141,6 +169,8 @@ function buildVolumeMounts(
       }
     }
   }
+  // Ensure the sessions dir tree is writable by container's node user (uid 1000)
+  try { execSync(`chmod -R a+rwX "${groupSessionsDir}"`, { stdio: 'pipe' }); } catch { /* best effort */ }
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
@@ -160,7 +190,7 @@ function buildVolumeMounts(
   });
 
   // Mount agent-runner source from host — recompiled on container startup.
-  // Bypasses Apple Container's sticky build cache for code changes.
+  // Ensures code changes are picked up without rebuilding the image.
   const agentRunnerSrc = path.join(projectRoot, 'container', 'agent-runner', 'src');
   mounts.push({
     hostPath: agentRunnerSrc,
@@ -182,11 +212,20 @@ function buildVolumeMounts(
 }
 
 /**
- * Read allowed secrets from .env for passing to the container via stdin.
- * Secrets are never written to disk or mounted as files.
+ * Read allowed secrets for passing to the container via stdin.
+ * OAuth token is sourced from ~/.claude/.credentials.json (auto-refreshed);
+ * other secrets still come from .env.
  */
-function readSecrets(): Record<string, string> {
-  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
+async function readSecrets(): Promise<Record<string, string>> {
+  const secrets = readEnvFile(['ANTHROPIC_API_KEY']);
+
+  // Prefer auto-refreshed token from credentials.json
+  const oauthToken = await ensureFreshToken();
+  if (oauthToken) {
+    secrets.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
+  }
+
+  return secrets;
 }
 
 function buildContainerArgs(mounts: VolumeMount[], containerName: string): string[] {
@@ -199,16 +238,15 @@ function buildContainerArgs(mounts: VolumeMount[], containerName: string): strin
   const hostGid = process.getgid?.();
   if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
     args.push('--user', `${hostUid}:${hostGid}`);
-    args.push('-e', 'HOME=/home/node');
   }
 
-  // Apple Container: --mount for readonly, -v for read-write
+  // Explicitly set HOME so Claude Agent SDK writes to /home/node/.claude
+  args.push('-e', 'HOME=/home/node');
+
+  // Docker: -v with :ro suffix for readonly
   for (const mount of mounts) {
     if (mount.readonly) {
-      args.push(
-        '--mount',
-        `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
-      );
+      args.push('-v', `${mount.hostPath}:${mount.containerPath}:ro`);
     } else {
       args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
     }
@@ -261,8 +299,11 @@ export async function runContainerAgent(
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
   fs.mkdirSync(logsDir, { recursive: true });
 
+  // Resolve secrets before entering the Promise callback (which isn't async)
+  const secrets = await readSecrets();
+
   return new Promise((resolve) => {
-    const container = spawn('container', containerArgs, {
+    const container = spawn('docker', containerArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -274,7 +315,7 @@ export async function runContainerAgent(
     let stderrTruncated = false;
 
     // Pass secrets via stdin (never written to disk or mounted as files)
-    input.secrets = readSecrets();
+    input.secrets = secrets;
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
     // Remove secrets from input so they don't appear in logs
@@ -369,7 +410,7 @@ export async function runContainerAgent(
     const killOnTimeout = () => {
       timedOut = true;
       logger.error({ group: group.name, containerName }, 'Container timeout, stopping gracefully');
-      exec(`container stop ${containerName}`, { timeout: 15000 }, (err) => {
+      exec(`docker stop ${containerName}`, { timeout: 15000 }, (err) => {
         if (err) {
           logger.warn({ group: group.name, containerName, err }, 'Graceful stop failed, force killing');
           container.kill('SIGKILL');
