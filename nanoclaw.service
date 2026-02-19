@@ -1,0 +1,32 @@
+[Unit]
+Description=NanoClaw AI Assistant (Slack)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/nanoclaw
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Environment
+Environment=NODE_ENV=production
+EnvironmentFile=/home/ubuntu/nanoclaw/.env
+
+# Logging (journalctl -u nanoclaw)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nanoclaw
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=false
+
+[Install]
+WantedBy=multi-user.target

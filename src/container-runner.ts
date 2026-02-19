@@ -222,14 +222,17 @@ function buildVolumeMounts(
     readonly: false,
   });
 
-  // Mount agent-runner source from host — recompiled on container startup.
-  // Ensures code changes are picked up without rebuilding the image.
-  const agentRunnerSrc = path.join(projectRoot, 'container', 'agent-runner', 'src');
-  mounts.push({
-    hostPath: agentRunnerSrc,
-    containerPath: '/app/src',
-    readonly: true,
-  });
+  // Dev mode: mount agent-runner source from host for live code changes.
+  // In production (DEV_MOUNT=false or unset), uses pre-built /app/dist inside
+  // the image, saving ~2s of TypeScript compilation per container start.
+  if (process.env.DEV_MOUNT === 'true') {
+    const agentRunnerSrc = path.join(projectRoot, 'container', 'agent-runner', 'src');
+    mounts.push({
+      hostPath: agentRunnerSrc,
+      containerPath: '/app/src',
+      readonly: true,
+    });
+  }
 
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
@@ -358,6 +361,7 @@ export async function runContainerAgent(
     let parseBuffer = '';
     let newSessionId: string | undefined;
     let outputChain = Promise.resolve();
+    let firstOutputLogged = false;
 
     container.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -396,6 +400,13 @@ export async function runContainerAgent(
               newSessionId = parsed.newSessionId;
             }
             hadStreamingOutput = true;
+            if (!firstOutputLogged) {
+              firstOutputLogged = true;
+              logger.info(
+                { group: group.name, coldStartMs: Date.now() - startTime },
+                'First output from container (includes startup + inference)',
+              );
+            }
             // Activity detected — reset the hard timeout
             resetTimeout();
             // Call onOutput for all markers (including null results)
@@ -411,8 +422,16 @@ export async function runContainerAgent(
       }
     });
 
+    let containerReadyLogged = false;
     container.stderr.on('data', (data) => {
       const chunk = data.toString();
+      if (!containerReadyLogged && chunk.includes('[agent-runner]')) {
+        containerReadyLogged = true;
+        logger.info(
+          { group: group.name, containerStartupMs: Date.now() - startTime },
+          'Container ready (agent-runner first log)',
+        );
+      }
       const lines = chunk.trim().split('\n');
       for (const line of lines) {
         if (line) logger.debug({ container: group.folder }, line);

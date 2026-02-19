@@ -457,7 +457,46 @@ function ensureDockerRunning(): void {
   }
 }
 
+/**
+ * Singleton guard: ensures only one host process listens on Slack.
+ * Uses a PID lock file. If a stale lock is found (process dead), it is reclaimed.
+ * This does NOT affect worker containers spawned by a running host.
+ */
+function acquireSingletonLock(): void {
+  const lockFile = path.join(DATA_DIR, 'host.pid');
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+
+  if (fs.existsSync(lockFile)) {
+    const existingPid = parseInt(fs.readFileSync(lockFile, 'utf-8').trim(), 10);
+    if (existingPid && existingPid !== process.pid) {
+      try {
+        process.kill(existingPid, 0); // Check if process is alive (signal 0)
+        logger.error(
+          { existingPid },
+          'Another NanoClaw host process is already running. Exiting to prevent duplicate Slack listeners.',
+        );
+        process.exit(1);
+      } catch {
+        // Process is dead — stale lock, safe to reclaim
+        logger.warn({ existingPid }, 'Reclaiming stale PID lock from dead process');
+      }
+    }
+  }
+
+  fs.writeFileSync(lockFile, String(process.pid), 'utf-8');
+
+  // Clean up lock file on exit
+  const removeLock = () => {
+    try {
+      const current = fs.readFileSync(lockFile, 'utf-8').trim();
+      if (current === String(process.pid)) fs.unlinkSync(lockFile);
+    } catch { /* ignore */ }
+  };
+  process.on('exit', removeLock);
+}
+
 async function main(): Promise<void> {
+  acquireSingletonLock();
   ensureDockerRunning();
   prewarmContainer(); // Pre-warm container image in background
   initDatabase();

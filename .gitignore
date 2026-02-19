@@ -22,6 +22,12 @@ groups/global/*
 *.keys.json
 .env
 
+# Debug/test logs
+*.log
+*.bak
+test_*.cjs
+test_*.js
+
 # OS
 .DS_Store
 
