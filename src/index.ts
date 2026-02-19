@@ -55,6 +55,17 @@ let messageLoopRunning = false;
 const channels: Channel[] = [];
 const queue = new GroupQueue();
 
+// Event-driven message wake: resolves immediately when a new message arrives
+// instead of waiting for the full POLL_INTERVAL
+let wakeMessageLoop: (() => void) | null = null;
+
+function notifyNewMessage(): void {
+  if (wakeMessageLoop) {
+    wakeMessageLoop();
+    wakeMessageLoop = null;
+  }
+}
+
 function loadState(): void {
   lastTimestamp = getRouterState('last_timestamp') || '';
   const agentTs = getRouterState('last_agent_timestamp');
@@ -379,7 +390,14 @@ async function startMessageLoop(): Promise<void> {
     } catch (err) {
       logger.error({ err }, 'Error in message loop');
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+    // Wait for either a new message event or fallback poll interval
+    await new Promise<void>((resolve) => {
+      wakeMessageLoop = resolve;
+      setTimeout(() => {
+        wakeMessageLoop = null;
+        resolve();
+      }, POLL_INTERVAL);
+    });
   }
 }
 
@@ -458,7 +476,10 @@ async function main(): Promise<void> {
 
   // Channel callbacks (shared by all channels)
   const channelOpts = {
-    onMessage: (_chatJid: string, msg: NewMessage) => storeMessage(msg),
+    onMessage: (_chatJid: string, msg: NewMessage) => {
+      storeMessage(msg);
+      notifyNewMessage(); // Wake message loop immediately
+    },
     onChatMetadata: (chatJid: string, timestamp: string, name?: string, channel?: string, isGroup?: boolean) =>
       storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
