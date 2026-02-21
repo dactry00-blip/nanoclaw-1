@@ -42,6 +42,10 @@ Files you create are saved in `/workspace/group/`. Use this for notes, research,
 
 The `conversations/` folder contains searchable history of past conversations. Use this to recall context from previous sessions.
 
+### 대화 기록 검색
+`conversations/index.json`에 과거 대화 목록이 있다.
+사용자 질문이 과거 맥락을 필요로 할 때 index.json을 읽어 관련 대화를 찾고, 해당 파일을 Read로 열어 참고한다.
+
 When you learn something important:
 - Create files for structured data (e.g., `customers.md`, `preferences.md`)
 - Split files larger than 500 lines into folders

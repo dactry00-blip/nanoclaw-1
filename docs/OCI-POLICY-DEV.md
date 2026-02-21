@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-21 07:00 UTC
+**최종 업데이트**: 2026-02-21 13:00 UTC
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -40,6 +40,17 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - 워커 컨테이너에는 영향 없음
 
 ## 최근 변경사항 (2026-02-21)
+
+### 에이전트 자동 학습 시스템 (3단계 구조)
+- `container/agent-runner/src/index.ts`에 `extractLearnings()` 함수 추가
+- PreCompact hook에서 대화 종료 시 학습 포인트 자동 추출 (LLM 호출 없이 정규식 기반)
+- 감지 패턴: 수정/교정(`아니야`, `수정해`), 선호(`이게 더`, `이렇게 해줘`), 기억 요청(`기억해`, `기록해`)
+- 학습 내용을 `/workspace/group/LEARNINGS.md`에 자동 기록 (최대 5개/세션)
+- 3단계 학습 구조:
+  1. **실시간 감지**: CLAUDE.md 지침으로 에이전트가 실시간 학습 기록
+  2. **PreCompact 자동 추출**: 대화 종료 시 패턴 매칭으로 학습 포인트 추출
+  3. **CLAUDE.md 승격**: 사용자가 명시적으로 요청 시에만 지침에 추가
+- Purpose Tags로 그룹별 학습 스코프 제한 (목적 외 학습 오염 방지)
 
 ### Threads API 장기 토큰 자동 갱신
 - `src/threads-refresh.ts` 추가: Meta 장기 토큰(60일) 만료 7일 전 자동 갱신
@@ -114,6 +125,10 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - **진행 상태 업데이트**: 도구 사용 감지 시 한글 라벨로 progress 이벤트 전송 (3초 간격)
   - `TOOL_LABELS` 맵: WebSearch → "웹 검색 중", Bash → "명령어 실행 중" 등
 - **Threads API 토큰**: `THREADS_ACCESS_TOKEN`, `THREADS_USER_ID`는 `process.env`에 노출 (Bash에서 curl 사용 가능)
+- **PreCompact Hook**: 대화 종료 시 트랜스크립트를 `conversations/` 폴더에 아카이빙
+  - `extractLearnings()`: 정규식 기반 학습 포인트 추출 (LLM 호출 없음, 성능 오버헤드 0)
+  - 감지 패턴: 수정/교정, 선호 표현, 기억 요청 등
+  - 추출된 학습을 `/workspace/group/LEARNINGS.md`에 자동 추가 (Context 포함)
 
 ## 컨테이너 마운트 구조
 

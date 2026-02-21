@@ -174,6 +174,34 @@ function extractLearnings(messages: ParsedMessage[]): string[] {
 }
 
 /**
+ * Extract top keywords from user messages by frequency.
+ * Pure heuristic — no LLM calls.
+ */
+function extractKeywords(messages: ParsedMessage[]): string[] {
+  const stopwords = new Set([
+    '그리고', '하지만', '그런데', '때문에', '그래서', '이것', '저것',
+    '있다', '없다', '하다', '되다', '수', '것', '등', '또', '더',
+    'the', 'and', 'for', 'that', 'this', 'with', 'from', 'are', 'was',
+    'not', 'but', 'have', 'has', 'had', 'will', 'can', 'would', 'should',
+  ]);
+
+  const freq = new Map<string, number>();
+  for (const msg of messages) {
+    if (msg.role !== 'user') continue;
+    for (const word of msg.content.split(/\s+/)) {
+      const clean = word.replace(/[^a-zA-Z0-9가-힣]/g, '').toLowerCase();
+      if (clean.length <= 2 || stopwords.has(clean)) continue;
+      freq.set(clean, (freq.get(clean) || 0) + 1);
+    }
+  }
+
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([word]) => word);
+}
+
+/**
  * Archive the full transcript to conversations/ before compaction.
  * Also extract learning points and append to LEARNINGS.md.
  */
@@ -220,6 +248,26 @@ function createPreCompactHook(): HookCallback {
         const block = `\n## ${ts} (auto-extracted)\n\n${learnings.join('\n\n')}\n`;
         fs.appendFileSync(learningsPath, block);
         log(`Appended ${learnings.length} learnings to LEARNINGS.md`);
+      }
+
+      // Update conversations/index.json
+      try {
+        const indexPath = path.join(conversationsDir, 'index.json');
+        let index: Array<{ file: string; date: string; summary: string; keywords: string[] }> = [];
+        if (fs.existsSync(indexPath)) {
+          index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+        }
+        const keywords = extractKeywords(messages);
+        index.push({
+          file: filename,
+          date,
+          summary: summary || name,
+          keywords,
+        });
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+        log(`Updated conversations/index.json (${index.length} entries)`);
+      } catch (indexErr) {
+        log(`Failed to update index.json: ${indexErr instanceof Error ? indexErr.message : String(indexErr)}`);
       }
     } catch (err) {
       log(`Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`);
