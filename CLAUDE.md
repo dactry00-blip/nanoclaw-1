@@ -86,5 +86,5 @@ Entrypoint uses pre-built `/app/dist` by default (0.3s startup). Only recompiles
 ## 작업 완료 체크리스트
 
 매 작업 완료 시 사용자에게 다음 진행 여부를 물어볼 것:
-1. **OCI 정책서 3종 업데이트** (`docs/OCI-POLICY-DEV.md`, `docs/OCI-POLICY-OPS.md`, `docs/OCI-POLICY-TROUBLESHOOT.md`) — 작업 중 얻은 교훈, 변경사항, 트러블슈팅 경험 기록
-2. **Git 커밋** — 변경된 파일들을 의미 있는 단위로 커밋
+1. **OCI 정책서 3종 업데이트** — OCI 환경 변경에 해당하는 작업(인프라, 서버 설정, 배포, 운영 변경 등)인 경우에만 물어볼 것. 에이전트 지침이나 코드 로직 변경은 해당 없음.
+2. **Git 커밋 & 푸시** — 항상 물어볼 것. 변경된 파일들을 커밋하고 원격에 푸시.
