@@ -18,8 +18,48 @@ import {
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
 import { ensureFreshToken } from './oauth-refresh.js';
+import { ensureFreshThreadsToken } from './threads-refresh.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
+
+// ── Auth fallback state management ──────────────────────────────────
+const AUTH_STATE_PATH = path.join(DATA_DIR, 'auth-state.json');
+const FALLBACK_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
+
+interface AuthState {
+  fallbackSince: number | null;
+}
+
+function readAuthState(): AuthState {
+  try {
+    return JSON.parse(fs.readFileSync(AUTH_STATE_PATH, 'utf-8'));
+  } catch {
+    return { fallbackSince: null };
+  }
+}
+
+function writeAuthState(state: AuthState): void {
+  fs.mkdirSync(path.dirname(AUTH_STATE_PATH), { recursive: true });
+  fs.writeFileSync(AUTH_STATE_PATH, JSON.stringify(state) + '\n');
+}
+
+function enterFallbackMode(): void {
+  writeAuthState({ fallbackSince: Date.now() });
+  logger.warn('Auth: entered fallback mode (API key), will retry OAuth in 5 hours');
+}
+
+function clearFallbackMode(): void {
+  const state = readAuthState();
+  if (state.fallbackSince) {
+    writeAuthState({ fallbackSince: null });
+    logger.info('Auth: cleared fallback mode, back to OAuth');
+  }
+}
+
+interface SecretsResult {
+  secrets: Record<string, string>;
+  authMethod: 'oauth' | 'fallback';
+}
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
@@ -74,6 +114,7 @@ export interface ContainerOutput {
   result: string | null;
   newSessionId?: string;
   error?: string;
+  progress?: string;
 }
 
 interface VolumeMount {
@@ -249,19 +290,75 @@ function buildVolumeMounts(
 
 /**
  * Read allowed secrets for passing to the container via stdin.
- * OAuth token is sourced from ~/.claude/.credentials.json (auto-refreshed);
- * other secrets still come from .env.
+ *
+ * Auth priority (bypassPermissions mode):
+ *   1. CLAUDE_CODE_OAUTH_TOKEN (Pro subscription — free)
+ *   2. ANTHROPIC_API_KEY (prepaid fallback — paid per token)
+ *
+ * IMPORTANT: In bypassPermissions mode, the SDK uses ANTHROPIC_API_KEY
+ * over CLAUDE_CODE_OAUTH_TOKEN when both are present. So we must only
+ * pass one at a time to ensure Pro subscription is used when available.
+ *
+ * Fallback state: when a container fails while using OAuth, we switch to
+ * the prepaid API key for 5 hours (Pro quota reset window), then
+ * automatically retry OAuth.
  */
-async function readSecrets(): Promise<Record<string, string>> {
-  const secrets = readEnvFile(['ANTHROPIC_API_KEY']);
+async function readSecrets(): Promise<SecretsResult> {
+  const secrets = readEnvFile(['ANTHROPIC_API_KEY_FALLBACK', 'THREADS_ACCESS_TOKEN', 'THREADS_USER_ID']);
+  let authMethod: 'oauth' | 'fallback' = 'oauth';
 
-  // Prefer auto-refreshed token from credentials.json
+  const authState = readAuthState();
+
+  // If in fallback mode and 5 hours haven't passed, use API key directly
+  if (authState.fallbackSince && Date.now() - authState.fallbackSince < FALLBACK_DURATION_MS) {
+    const fallbackKey = secrets.ANTHROPIC_API_KEY_FALLBACK;
+    if (fallbackKey) {
+      secrets.ANTHROPIC_API_KEY = fallbackKey;
+      authMethod = 'fallback';
+      const remainingMin = Math.ceil(
+        (FALLBACK_DURATION_MS - (Date.now() - authState.fallbackSince)) / 60000,
+      );
+      logger.info(
+        { remainingMinutes: remainingMin },
+        'Auth: in fallback mode, using prepaid API key',
+      );
+      delete secrets.ANTHROPIC_API_KEY_FALLBACK;
+      return { secrets, authMethod };
+    }
+  }
+
+  // Fallback period expired — clear state and try OAuth again
+  if (authState.fallbackSince) {
+    clearFallbackMode();
+  }
+
+  // Try Pro subscription OAuth token
   const oauthToken = await ensureFreshToken();
   if (oauthToken) {
     secrets.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
+    authMethod = 'oauth';
+    logger.info('Auth: using Pro subscription OAuth token');
+  } else {
+    // OAuth unavailable — enter fallback mode
+    const fallbackKey = secrets.ANTHROPIC_API_KEY_FALLBACK;
+    if (fallbackKey) {
+      secrets.ANTHROPIC_API_KEY = fallbackKey;
+      authMethod = 'fallback';
+      enterFallbackMode();
+      logger.info('Auth: OAuth unavailable, using fallback prepaid API key');
+    }
   }
 
-  return secrets;
+  // Clean up — don't pass the renamed key to the container
+  delete secrets.ANTHROPIC_API_KEY_FALLBACK;
+
+  // Refresh Threads long-lived token if expiring soon
+  const freshThreadsToken = await ensureFreshThreadsToken();
+  if (freshThreadsToken) {
+    secrets.THREADS_ACCESS_TOKEN = freshThreadsToken;
+  }
+
+  return { secrets, authMethod };
 }
 
 function buildContainerArgs(mounts: VolumeMount[], containerName: string): string[] {
@@ -336,7 +433,7 @@ export async function runContainerAgent(
   fs.mkdirSync(logsDir, { recursive: true });
 
   // Resolve secrets before entering the Promise callback (which isn't async)
-  const secrets = await readSecrets();
+  const { secrets, authMethod } = await readSecrets();
 
   return new Promise((resolve) => {
     const container = spawn('docker', containerArgs, {
@@ -365,6 +462,12 @@ export async function runContainerAgent(
 
     container.stdout.on('data', (data) => {
       const chunk = data.toString();
+
+      // Detect rate-limit signals in stdout as well
+      if (!rateLimitDetected && authMethod === 'oauth' && RATE_LIMIT_PATTERN.test(chunk)) {
+        rateLimitDetected = true;
+        logger.warn({ group: group.name }, 'Rate limit detected in container stdout');
+      }
 
       // Always accumulate for logging
       if (!stdoutTruncated) {
@@ -423,8 +526,17 @@ export async function runContainerAgent(
     });
 
     let containerReadyLogged = false;
+    let rateLimitDetected = false;
+    const RATE_LIMIT_PATTERN = /\b(429|rate.?limit|too many requests|quota exceeded|usage limit)\b/i;
     container.stderr.on('data', (data) => {
       const chunk = data.toString();
+
+      // Detect 429 / rate-limit signals in real time
+      if (!rateLimitDetected && authMethod === 'oauth' && RATE_LIMIT_PATTERN.test(chunk)) {
+        rateLimitDetected = true;
+        logger.warn({ group: group.name }, 'Rate limit detected in container stderr');
+      }
+
       if (!containerReadyLogged && chunk.includes('[agent-runner]')) {
         containerReadyLogged = true;
         logger.info(
@@ -596,12 +708,26 @@ export async function runContainerAgent(
           'Container exited with error',
         );
 
+        // If rate limit was detected while using OAuth, switch to fallback
+        // API key for the next 5 hours (Pro quota reset window)
+        if (rateLimitDetected) {
+          enterFallbackMode();
+        }
+
         resolve({
           status: 'error',
           result: null,
           error: `Container exited with code ${code}: ${stderr.slice(-200)}`,
         });
         return;
+      }
+
+      // If rate limit was detected even on a "successful" exit, enter fallback.
+      // Otherwise, OAuth is confirmed working — clear any stale fallback state.
+      if (rateLimitDetected) {
+        enterFallbackMode();
+      } else if (authMethod === 'oauth') {
+        clearFallbackMode();
       }
 
       // Streaming mode: wait for output chain to settle, return completion marker

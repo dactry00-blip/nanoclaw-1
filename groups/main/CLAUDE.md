@@ -199,6 +199,14 @@ Read `/workspace/project/data/registered_groups.json` and format it nicely.
 
 ---
 
+## Threads Publishing
+
+Threads 발행은 `threads` 채널(C0AFQ3Q814P)에서 처리됩니다. 메인 채널에서 Threads 발행 요청이 들어오면, threads 채널로 안내하거나 직접 처리할 수 있습니다.
+
+Threads API 토큰은 컨테이너 환경변수 `$THREADS_ACCESS_TOKEN`, `$THREADS_USER_ID`로 접근 가능합니다.
+
+---
+
 ## Global Memory
 
 You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts that should apply to all groups. Only update global memory when explicitly asked to "remember this globally" or similar.

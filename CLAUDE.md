@@ -13,6 +13,7 @@ Single Node.js process that connects to Slack (Socket Mode), routes messages to 
 | `src/index.ts` | Orchestrator: state, message loop, singleton PID lock, agent invocation |
 | `src/channels/slack.ts` | Slack connection (Socket Mode), send/receive, typing indicator |
 | `src/oauth-refresh.ts` | OAuth token auto-refresh from `~/.claude/.credentials.json` |
+| `src/threads-refresh.ts` | Threads API long-lived token auto-refresh (60-day, 7-day buffer) |
 | `src/container-runner.ts` | Spawns Docker containers, pre-built dist fast path, latency instrumentation |
 | `src/config.ts` | Trigger pattern, paths, intervals (POLL_INTERVAL=500ms) |
 | `src/router.ts` | Message formatting and outbound routing |
@@ -81,3 +82,9 @@ Host process uses PID lock (`data/host.pid`) to prevent duplicate Slack listener
 ## Container Startup Optimization
 
 Entrypoint uses pre-built `/app/dist` by default (0.3s startup). Only recompiles TypeScript when `DEV_MOUNT=true` mounts newer source from host (2.3s startup). Controlled by `.build_stamp` timestamp comparison.
+
+## 작업 완료 체크리스트
+
+매 작업 완료 시 사용자에게 다음 진행 여부를 물어볼 것:
+1. **OCI 정책서 3종 업데이트** (`docs/OCI-POLICY-DEV.md`, `docs/OCI-POLICY-OPS.md`, `docs/OCI-POLICY-TROUBLESHOOT.md`) — 작업 중 얻은 교훈, 변경사항, 트러블슈팅 경험 기록
+2. **Git 커밋** — 변경된 파일들을 의미 있는 단위로 커밋
