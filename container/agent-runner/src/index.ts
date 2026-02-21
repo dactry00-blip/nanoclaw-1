@@ -141,7 +141,41 @@ function getSessionSummary(sessionId: string, transcriptPath: string): string | 
 }
 
 /**
+ * Extract learning points from conversation messages using heuristic patterns.
+ * No LLM calls — purely regex-based for zero performance overhead.
+ */
+function extractLearnings(messages: ParsedMessage[]): string[] {
+  const learnings: string[] = [];
+  const correctionPatterns = /아니[야요]|수정해|이건 아냐|대신|이렇게 해|잘못|틀렸|고쳐/;
+  const preferencePatterns = /이게 더|이렇게 해줘|앞으로는|항상|절대/;
+  const memoryPatterns = /기억해|기록해|메모해|잊지 마/;
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.role !== 'user') continue;
+
+    let category = '';
+    if (memoryPatterns.test(msg.content)) category = 'Preference';
+    else if (correctionPatterns.test(msg.content)) category = 'Correction';
+    else if (preferencePatterns.test(msg.content)) category = 'Preference';
+
+    if (category) {
+      const context = messages.slice(Math.max(0, i - 1), i + 1)
+        .map(m => m.content.slice(0, 150)).join(' → ');
+      learnings.push(
+        `### [${category}] ${msg.content.slice(0, 60)}\n` +
+        `${msg.content.slice(0, 300)}\n` +
+        `Context: ${context.slice(0, 200)}\n` +
+        `Confidence: high`
+      );
+    }
+  }
+  return learnings.slice(0, 5); // 최대 5개
+}
+
+/**
  * Archive the full transcript to conversations/ before compaction.
+ * Also extract learning points and append to LEARNINGS.md.
  */
 function createPreCompactHook(): HookCallback {
   return async (input, _toolUseId, _context) => {
@@ -177,6 +211,16 @@ function createPreCompactHook(): HookCallback {
       fs.writeFileSync(filePath, markdown);
 
       log(`Archived conversation to ${filePath}`);
+
+      // Extract and append learning points
+      const learnings = extractLearnings(messages);
+      if (learnings.length > 0) {
+        const learningsPath = '/workspace/group/LEARNINGS.md';
+        const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
+        const block = `\n## ${ts} (auto-extracted)\n\n${learnings.join('\n\n')}\n`;
+        fs.appendFileSync(learningsPath, block);
+        log(`Appended ${learnings.length} learnings to LEARNINGS.md`);
+      }
     } catch (err) {
       log(`Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`);
     }

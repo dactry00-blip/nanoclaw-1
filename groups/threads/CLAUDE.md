@@ -101,6 +101,7 @@ curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=id,text,
 - 반말+존댓말 자연스럽게 혼용
 - 쉼표나 줄바꿈으로 호흡 조절
 - 쉬운 단어, 일상적 표현 사용
+- 확정적 표현 피하기: "~더라구요" (X) → "~걸로 이해했어요" (O)
 
 제거해야 할 AI 패턴:
 ✗ "~를 혁신적으로 향상시킵니다" (과장된 수식어)
@@ -110,6 +111,8 @@ curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=id,text,
 ✗ "미침", "레전드", "ㄹㅇ" 같은 억지 밈
 ✗ "~해보세요!", "~하시길 바랍니다" 같은 뻔한 결론
 ✗ 완벽하게 정제된 문장 구조 (불완전함이 오히려 자연스러움)
+✗ 억지로 줄임말 쓰지 말기 ("디코"→"디스코드", "클코"→"클로드 코드")
+✗ "삽질" 같은 과격한 단어 쓰지 말기 → "시행착오"로 순화
 ```
 
 ### 6. 배포담당자
@@ -197,3 +200,21 @@ curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=id,text,
 - 반응이 좋았던 글의 패턴을 기록할 것
 - 사용자가 수정한 부분을 학습하여 다음 초안에 반영할 것
 - "비프리 스타일 노트" 파일을 만들어 지속 업데이트할 것
+
+---
+
+## Learning System
+
+### Purpose Tags
+content-writing, content-performance, bfree-style, publishing-workflow
+
+### 학습 대상
+- 비프리 글쓰기 스타일 피드백 (톤, 표현, 구조)
+- 콘텐츠 성과 패턴 (어떤 주제/형식이 조회수 높은지)
+- 사용자의 콘텐츠 선호와 수정 패턴
+- 발행 워크플로우 개선점
+
+### 학습 제외
+- 서버 운영, 기술 디버깅, 인프라 관련
+- 다른 그룹(main, global)의 업무
+- API 사용법 (CLAUDE.md에 이미 문서화됨)

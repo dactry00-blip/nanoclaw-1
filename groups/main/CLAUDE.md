@@ -213,6 +213,22 @@ You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts
 
 ---
 
+## Learning System
+
+### Purpose Tags
+user-workflow, admin-preferences, system-management
+
+### 학습 대상
+- 사용자의 작업 습관과 선호
+- 자주 사용하는 명령어/패턴
+- 그룹 관리 관련 교훈
+
+### 학습 제외
+- 특정 그룹의 도메인 지식 (threads 콘텐츠 스타일 등)
+- 일회성 디버깅 내용
+
+---
+
 ## Scheduling for Other Groups
 
 When scheduling tasks for other groups, use the `target_group_jid` parameter with the group's JID from `registered_groups.json`:
