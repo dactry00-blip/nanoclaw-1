@@ -187,6 +187,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let outputSentToUser = false;
 
   const output = await runAgent(group, prompt, chatJid, async (result) => {
+    // Progress update — update the typing message text
+    if (result.progress) {
+      await channel.updateTyping?.(chatJid, result.progress);
+      return;
+    }
+
     // Streaming output callback — called for each agent result
     if (result.result) {
       const raw = typeof result.result === 'string' ? result.result : JSON.stringify(result.result);

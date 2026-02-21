@@ -34,6 +34,7 @@ interface ContainerOutput {
   result: string | null;
   newSessionId?: string;
   error?: string;
+  progress?: string;
 }
 
 interface SessionEntry {
@@ -413,6 +414,22 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
+  // Tool name → Korean label mapping for progress updates
+  const TOOL_LABELS: Record<string, string> = {
+    WebSearch: '웹 검색 중',
+    WebFetch: '웹 페이지 분석 중',
+    Bash: '명령어 실행 중',
+    Read: '파일 읽는 중',
+    Write: '파일 작성 중',
+    Edit: '파일 수정 중',
+    Glob: '파일 검색 중',
+    Grep: '코드 검색 중',
+    Task: '서브 에이전트 실행 중',
+    TeamCreate: '팀 에이전트 생성 중',
+    Skill: '스킬 실행 중',
+  };
+  let lastProgressTime = 0;
+
   for await (const message of query({
     prompt: stream,
     options: {
@@ -462,6 +479,22 @@ async function runQuery(
       lastAssistantUuid = (message as { uuid: string }).uuid;
     }
 
+    // Detect tool_use blocks in assistant messages and emit progress updates
+    if (message.type === 'assistant' && 'message' in message) {
+      const assistantMsg = (message as { message?: { content?: Array<{ type: string; name?: string }> } }).message;
+      if (assistantMsg?.content) {
+        const toolUses = assistantMsg.content.filter(b => b.type === 'tool_use' && b.name);
+        if (toolUses.length > 0) {
+          const label = TOOL_LABELS[toolUses[0].name!] || toolUses[0].name;
+          const now = Date.now();
+          if (now - lastProgressTime >= 3000) {
+            lastProgressTime = now;
+            writeOutput({ status: 'success', result: null, progress: label });
+          }
+        }
+      }
+    }
+
     if (message.type === 'system' && message.subtype === 'init') {
       newSessionId = message.session_id;
       log(`Session initialized: ${newSessionId}`);
@@ -509,9 +542,14 @@ async function main(): Promise<void> {
 
   // Build SDK env: merge secrets into process.env for the SDK only.
   // Secrets never touch process.env itself, so Bash subprocesses can't see them.
+  // Exception: THREADS_* tokens are set in process.env so Bash/curl can access them.
   const sdkEnv: Record<string, string | undefined> = { ...process.env };
+  const bashAccessKeys = new Set(['THREADS_ACCESS_TOKEN', 'THREADS_USER_ID']);
   for (const [key, value] of Object.entries(containerInput.secrets || {})) {
     sdkEnv[key] = value;
+    if (bashAccessKeys.has(key)) {
+      process.env[key] = value;
+    }
   }
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));

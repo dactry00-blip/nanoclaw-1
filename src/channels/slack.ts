@@ -192,4 +192,20 @@ export class SlackChannel implements Channel {
       logger.debug({ channel: jid, err }, 'Typing indicator error');
     }
   }
+
+  async updateTyping(jid: string, text: string): Promise<void> {
+    try {
+      const ts = this.typingMessages.get(jid);
+      if (ts) {
+        await this.app.client.chat.update({
+          token: this.botToken,
+          channel: jid,
+          ts,
+          text: `${ASSISTANT_NAME}: _${text}..._`,
+        });
+      }
+    } catch (err) {
+      logger.debug({ channel: jid, err }, 'Update typing error');
+    }
+  }
 }

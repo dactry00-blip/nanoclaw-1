@@ -47,11 +47,6 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - 상태 파일: `data/threads-token-state.json` (만료일, 마지막 갱신 시각 추적)
 - 토큰 발급 시 정식 OAuth 플로우 필수 (Developer Portal의 User Token Generator 토큰은 교환 불가)
 
-### 배포담당자 서브에이전트 추가
-- `groups/threads/CLAUDE.md`에 6번째 서브에이전트 "배포담당자" 추가
-- 역할: 최적 배포 타이밍 분석, 주제별 성과 예측, 발행 실행, 발행 후 성과 리포트
-- Threads Insights API 조회 섹션 추가 (게시물별 인사이트, 최근 25개 게시물 목록)
-
 ### 이전 변경사항 (2026-02-20)
 
 ### 진행 상태 표시 기능

@@ -51,12 +51,14 @@ async function refreshAccessToken(
   oauth: OAuthCredentials,
 ): Promise<OAuthCredentials | null> {
   try {
-    const res = await fetch('https://claude.ai/oauth/token', {
+    const res = await fetch('https://platform.claude.com/v1/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         grant_type: 'refresh_token',
         refresh_token: oauth.refreshToken,
+        client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
+        scope: oauth.scopes.join(' '),
       }),
     });
 
