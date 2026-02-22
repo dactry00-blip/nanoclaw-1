@@ -5,6 +5,7 @@ import path from 'path';
 import {
   ASSISTANT_NAME,
   DATA_DIR,
+  DISCORD_BOT_TOKEN,
   IDLE_TIMEOUT,
   MAIN_GROUP_FOLDER,
   POLL_INTERVAL,
@@ -12,6 +13,7 @@ import {
   SLACK_BOT_TOKEN,
   TRIGGER_PATTERN,
 } from './config.js';
+import { DiscordChannel } from './channels/discord.js';
 import { SlackChannel } from './channels/slack.js';
 
 import {
@@ -538,6 +540,13 @@ async function main(): Promise<void> {
     logger.info('Slack channel connected');
   } else {
     logger.warn('SLACK_BOT_TOKEN and/or SLACK_APP_TOKEN not set, Slack channel disabled');
+  }
+
+  if (DISCORD_BOT_TOKEN) {
+    const discord = new DiscordChannel(DISCORD_BOT_TOKEN, channelOpts);
+    channels.push(discord);
+    await discord.connect();
+    logger.info('Discord channel connected');
   }
 
   // Start subsystems (independently of connection handler)

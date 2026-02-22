@@ -1,12 +1,12 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-21 22:00 UTC
+**최종 업데이트**: 2026-02-22 04:00 UTC
 
 ## 환경 정보
 
 - **서버**: OCI (Oracle Cloud) Ubuntu 22.04 LTS
 - **프로젝트 경로**: `/home/ubuntu/nanoclaw`
-- **채널**: Slack (Socket Mode)
+- **채널**: Slack (Socket Mode) + Discord (Gateway)
 - **어시스턴트 이름**: 폴
 - **트리거 패턴**: `@폴` (멘션)
 - **인증**: Claude Pro 구독 OAuth 토큰 (자동 갱신)
@@ -38,7 +38,7 @@ DEV_MOUNT=true npm run dev
 npm run build && node dist/index.js
 ```
 
-## Slack 설정
+## 채널 설정
 
 `.env` 파일에 다음 토큰이 필요합니다 (퍼미션 600):
 
@@ -49,6 +49,7 @@ ANTHROPIC_API_KEY_FALLBACK=sk-ant-api03-...
 
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
+DISCORD_BOT_TOKEN=MTQ3...      # Discord 봇 토큰 (없으면 Discord 비활성화)
 ASSISTANT_NAME=폴
 TRIGGER_PATTERN=^@폴
 THREADS_ACCESS_TOKEN=...       # Threads API 장기 토큰 (threads 그룹용, 60일 유효)
@@ -61,6 +62,13 @@ THREADS_APP_SECRET=...         # Threads 앱 시크릿 (토큰 갱신용)
 - **Bot Token Scopes**: `chat:write`, `app_mentions:read`, `channels:history`, `users:read`
 - **Socket Mode**: 활성화 필수
 - **Event Subscriptions**: `message.channels`, `app_mention`
+
+### Discord 봇 설정
+- **Intents**: `Guilds`, `GuildMessages`, `MessageContent`, `DirectMessages`
+- **Privileged Gateway Intents**: Message Content Intent 활성화 필수 (Discord Developer Portal)
+- **JID 형식**: `dc:<channelId>` (그룹 등록 시 이 형식 사용)
+- **봇 이름**: 나노봇 (Discord 서버 내 표시명)
+- **트리거**: `@나노봇` 멘션 → 자동으로 `@폴` 트리거로 변환
 
 ## 토큰 관리
 
@@ -198,10 +206,10 @@ ps aux | grep 'node.*index' | grep -v grep  # 실행 중인 프로세스
 
 | 구간 | 시간 |
 |------|------|
-| Slack 이벤트 → 메시지 감지 | ~12ms |
+| Slack/Discord 이벤트 → 메시지 감지 | ~12ms |
 | 컨테이너 시작 (cold start) | ~300ms |
 | Claude 추론 | 가변 (내용에 따라) |
-| Slack 전송 | ~500ms |
+| Slack/Discord 전송 | ~500ms |
 | **총 인프라 오버헤드** | **~1초** |
 
 ## 자동화된 유지보수

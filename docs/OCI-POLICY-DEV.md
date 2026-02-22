@@ -1,36 +1,36 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-21 22:00 UTC
+**최종 업데이트**: 2026-02-22 04:00 UTC
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
 ## 아키텍처 개요
 
 ```
-User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉시 wake]
+User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [즉시 wake]
   → GroupQueue → container-runner → Docker Container (pre-built dist)
     → agent-runner → Claude Agent SDK → Claude API
-  → streaming output → SlackChannel.sendMessage → User
+  → streaming output → Channel.sendMessage → User
 ```
 
 ## 메시지 처리 흐름
 
-1. **수신**: `slack.ts` — Slack Socket Mode로 이벤트 수신, `onMessage` 콜백으로 DB 저장
+1. **수신**: `slack.ts` / `discord.ts` — Slack Socket Mode 또는 Discord Gateway로 이벤트 수신, `onMessage` 콜백으로 DB 저장
 2. **감지**: `index.ts:notifyNewMessage()` — 이벤트 기반 즉시 wake (500ms 폴링은 fallback만)
 3. **큐잉**: `group-queue.ts` — 그룹별 순차 처리, 동시 컨테이너 수 제한 (MAX_CONCURRENT_CONTAINERS=5)
 4. **실행**: `container-runner.ts:runContainerAgent()` — Docker 컨테이너 스폰, 프롬프트/시크릿 stdin 전달
 5. **Agent**: `container/agent-runner/src/index.ts` — Claude Agent SDK `query()` 호출, 결과 stdout 마커로 반환
-6. **응답**: `index.ts:processGroupMessages()` — 스트리밍 결과를 Slack으로 즉시 전송
+6. **응답**: `index.ts:processGroupMessages()` — 스트리밍 결과를 해당 채널(Slack/Discord)로 즉시 전송
 
 ## 응답 타이밍 (Cold Start 기준)
 
 | 구간 | 시간 | 참조 |
 |------|------|------|
-| Slack 이벤트 → 메시지 루프 wake | ~12ms | 이벤트 기반, 폴링 대기 없음 |
+| Slack/Discord 이벤트 → 메시지 루프 wake | ~12ms | 이벤트 기반, 폴링 대기 없음 |
 | 메시지 처리 → 컨테이너 spawn | ~550ms | DB 쿼리 + 시크릿 준비 |
 | 컨테이너 시작 (Docker → agent-runner) | ~300ms | pre-built dist, pre-warm 적용 |
 | Claude 추론 | 가변 | 내용 복잡도에 따라 |
-| 응답 → Slack 전송 | ~500ms | Slack API 호출 |
+| 응답 → Slack/Discord 전송 | ~500ms | 채널 API 호출 |
 
 ## 싱글턴 가드
 
@@ -39,7 +39,17 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - 죽은 프로세스의 stale lock은 자동 회수
 - 워커 컨테이너에는 영향 없음
 
-## 최근 변경사항 (2026-02-21)
+## 최근 변경사항 (2026-02-22)
+
+### Discord 채널 연동 (Slack 병행)
+- `src/channels/discord.ts` 추가: Discord Gateway로 메시지 수신/발신
+- `src/config.ts`에 `DISCORD_BOT_TOKEN` 추가
+- `src/index.ts`에 Discord 채널 초기화 블록 추가 (Slack 뒤에 조건부 연결)
+- 디스코드 JID 형식: `dc:<channelId>` — `ownsJid()`로 Slack과 자동 구분
+- `나노클로-운영자(DC)` 채널 등록 (folder: `main-dc`, requires_trigger: 0)
+- Slack과 Discord 동시 운영 가능 (멀티채널 구조)
+
+## 이전 변경사항 (2026-02-21)
 
 ### 대화 인덱스 자동 생성 (RAG 1단계) — 17:55 UTC
 - PreCompact 훅에서 `conversations/index.json`을 자동 생성하여 에이전트가 과거 대화를 키워드로 검색 가능
@@ -94,6 +104,15 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - `setTyping()`: "_thinking..._" 임시 메시지로 타이핑 인디케이터 구현
 - `updateTyping(jid, text)`: 타이핑 메시지 텍스트 업데이트 (진행 상태 표시용)
 - `sendMessage()`: `ASSISTANT_NAME: text` 형식으로 전송
+
+### src/channels/discord.ts (Discord 채널)
+- Discord Gateway 연결 (`discord.js`)
+- JID 형식: `dc:<channelId>` (Slack과 구분)
+- `@봇` 멘션 → `@ASSISTANT_NAME` 트리거로 자동 변환
+- 첨부파일: `[Image: name]`, `[File: name]` 등 플레이스홀더
+- 답장 컨텍스트: `[Reply to 사용자] 메시지` 형식
+- `sendMessage()`: `ASSISTANT_NAME: text` 형식, 2000자 분할 전송
+- `setTyping()`: 네이티브 Discord 타이핑 인디케이터 사용
 
 ### src/container-runner.ts (컨테이너 관리)
 - `buildVolumeMounts()`: 그룹별 마운트 구성
@@ -205,5 +224,6 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 | `EACCES: permission denied` debug dir | 컨테이너 uid(1000) vs 호스트 uid 불일치 | `sudo chmod -R 777` 세션 디렉토리 |
 | 토큰 만료 | OAuth 토큰 수명 초과 | `oauth-refresh.ts`가 자동 처리, `~/.claude/.credentials.json` 확인 |
 | Slack 메시지 미수신 | Bot token/App token 누락 | `.env`에 `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` 설정 |
+| Discord 메시지 미수신 | Bot token 누락 또는 Message Content Intent 비활성화 | `.env`에 `DISCORD_BOT_TOKEN` 설정, Developer Portal에서 Intent 활성화 |
 | 응답 느림 (인프라) | DEV_MOUNT=true로 매번 tsc 재컴파일 | 프로덕션: DEV_MOUNT 미설정, systemd 서비스 사용 |
 | 서비스 시작 안 됨 | Docker 미실행 | `sudo systemctl start docker` 후 `sudo systemctl start nanoclaw` |

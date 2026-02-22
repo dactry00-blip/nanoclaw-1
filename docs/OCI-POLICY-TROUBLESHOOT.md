@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-21 22:00 UTC
+**최종 업데이트**: 2026-02-22 04:00 UTC
 
 ## Known Issues
 
@@ -205,6 +205,30 @@ sqlite3 /home/ubuntu/nanoclaw/store/messages.db \
 # 컨테이너 내부 마운트 테스트
 docker run -i --rm --entrypoint ls nanoclaw-agent:latest /workspace/
 ```
+
+## Discord 연결 문제
+
+```bash
+# Discord 연결 상태
+sudo journalctl -u nanoclaw --since "1h ago" | grep -E 'Discord|discord'
+
+# 봇 연결 확인
+sudo journalctl -u nanoclaw -n 30 | grep -E 'Discord bot connected|Discord channel connected'
+
+# 등록된 Discord 채널 확인
+node -e "
+const Database = require('better-sqlite3');
+const db = new Database('/home/ubuntu/nanoclaw/store/messages.db');
+const rows = db.prepare(\"SELECT * FROM registered_groups WHERE jid LIKE 'dc:%'\").all();
+console.log(rows);
+db.close();
+"
+```
+
+### 증상: Discord 메시지 미수신
+- **Message Content Intent** 비활성화: Discord Developer Portal → Bot → Privileged Gateway Intents → Message Content Intent 활성화
+- `DISCORD_BOT_TOKEN` 미설정: `.env`에 토큰 추가 후 서비스 재시작
+- 채널 미등록: DB에 `dc:<channelId>` JID로 그룹 등록 필요
 
 ## Slack 연결 문제
 
