@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-21 13:00 UTC
+**최종 업데이트**: 2026-02-21 22:00 UTC
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -40,6 +40,14 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
 - 워커 컨테이너에는 영향 없음
 
 ## 최근 변경사항 (2026-02-21)
+
+### 대화 인덱스 자동 생성 (RAG 1단계) — 17:55 UTC
+- PreCompact 훅에서 `conversations/index.json`을 자동 생성하여 에이전트가 과거 대화를 키워드로 검색 가능
+- `extractKeywords()` 함수: 사용자 메시지에서 빈도 기반 상위 10개 키워드 추출 (LLM 호출 없음)
+- 불용어(stopwords) 필터링: 한영 조사/관사 제거 (예: '그리고', 'the', 'and' 등)
+- 인덱스 엔트리 형식: `{ file, date, summary, keywords[] }`
+- `groups/global/CLAUDE.md`에 대화 검색 지시 추가: "사용자 질문이 과거 맥락을 필요로 할 때 index.json을 읽어 관련 대화를 찾고 해당 파일을 Read로 열어 참고"
+- 커밋: `51809f9f` "feat: 대화 인덱스 자동 생성 (RAG 1단계)"
 
 ### 에이전트 자동 학습 시스템 (3단계 구조)
 - `container/agent-runner/src/index.ts`에 `extractLearnings()` 함수 추가
@@ -129,6 +137,8 @@ User (Slack) → SlackChannel → DB(storeMessage) → notifyNewMessage() [즉�
   - `extractLearnings()`: 정규식 기반 학습 포인트 추출 (LLM 호출 없음, 성능 오버헤드 0)
   - 감지 패턴: 수정/교정, 선호 표현, 기억 요청 등
   - 추출된 학습을 `/workspace/group/LEARNINGS.md`에 자동 추가 (Context 포함)
+  - `extractKeywords()`: 사용자 메시지에서 빈도 기반 상위 10개 키워드 추출 (불용어 필터링)
+  - `conversations/index.json` 자동 업데이트: 각 대화에 대해 `{file, date, summary, keywords[]}` 인덱스 생성
 
 ## 컨테이너 마운트 구조
 
