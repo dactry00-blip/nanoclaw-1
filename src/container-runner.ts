@@ -527,7 +527,7 @@ export async function runContainerAgent(
 
     let containerReadyLogged = false;
     let rateLimitDetected = false;
-    const RATE_LIMIT_PATTERN = /\b(429|rate.?limit|too many requests|quota exceeded|usage limit)\b/i;
+    const RATE_LIMIT_PATTERN = /\b(429|rate.?limit|too many requests|quota exceeded|usage limit|hit your limit|hit .+ limit|resets \d+\w+\s*\(UTC\))\b/i;
     container.stderr.on('data', (data) => {
       const chunk = data.toString();
 
