@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-22 04:00 UTC
+**최종 업데이트**: 2026-02-24 22:55 KST
 
 ## Known Issues
 
@@ -21,6 +21,9 @@ Developer Portal의 User Token Generator로 발급한 토큰은 단기 토큰(1�
 
 ### 6. [FIXED] API 키 우선순위로 Pro 크레딧 소진
 `ANTHROPIC_API_KEY` 환경변수가 설정되면 Claude Code가 OAuth(Pro 구독)를 무시하고 API 키를 우선 사용. **Fix**: `.env`에 `ANTHROPIC_API_KEY_FALLBACK`으로 저장, `readSecrets()`에서 OAuth/API키 중 하나만 전달.
+
+### 7. [FIXED] registered_groups folder UNIQUE 제약으로 멀티채널 등록 불가
+Slack과 Discord가 같은 그룹 폴더(`main`)를 공유하려 할 때 `folder` 컬럼의 UNIQUE 제약으로 인해 두 번째 채널 등록 실패. **Fix**: `src/db.ts`에서 `folder TEXT NOT NULL UNIQUE` → `folder TEXT NOT NULL`로 변경. JID가 PRIMARY KEY이므로 중복 방지는 유지되며, 여러 채널이 동일 폴더 공유 가능. (커밋: 0d11575, 2026-02-22 16:25 UTC)
 
 ## 교훈 (실수 반복 방지)
 
@@ -43,6 +46,18 @@ Developer Portal의 User Token Generator로 발급한 토큰은 단기 토큰(1�
 | `.claude.json` 미마운트 | CLI exit 0, 메시지 0개, 에러 없음 | 반드시 마운트 + 쓰기 가능 확인 |
 | credentials.json 미복사 | 인증 실패 | 컨테이너 `/home/node/.claude/`에 복사 |
 | UID 불일치 (host 1001, container 1000) | EACCES permission denied | `sudo chmod -R 777 data/sessions/` |
+
+### 🔴 시간대/스케줄 관련
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| `TZ` 미설정 (UTC 서버) | cron `0 9 * * *`가 KST 18:00에 실행 | `.env`에 `TZ=Asia/Seoul` 설정 |
+| 스케줄 태스크 `chat_jid` 단일 채널 | Slack만 발송, Discord 누락 | `task-scheduler.ts`에서 동일 folder의 모든 JID에 브로드캐스트 |
+| Discord 채널 folder를 별도로 설정 (`main-dc`) | 브로드캐스트 대상에서 제외 | Slack과 같은 folder 사용 (`main`) |
+
+### 🔴 DB/스키마 관련
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| `folder` UNIQUE 제약 유지 | Slack/Discord가 같은 폴더 공유 불가 | `folder TEXT NOT NULL` (UNIQUE 제거), JID로 중복 방지 |
 
 ## Threads API 토큰 트러블슈팅
 

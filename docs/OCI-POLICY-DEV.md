@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-22 04:00 UTC
+**최종 업데이트**: 2026-02-24 22:55 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -39,15 +39,37 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 - 죽은 프로세스의 stale lock은 자동 회수
 - 워커 컨테이너에는 영향 없음
 
-## 최근 변경사항 (2026-02-22)
+## 최근 변경사항 (2026-02-24)
 
-### Discord 채널 연동 (Slack 병행)
+### TZ=Asia/Seoul 설정 및 스케줄 태스크 멀티채널 브로드캐스트
+- `.env`에 `TZ=Asia/Seoul` 추가 → cron 스케줄러가 한국시간(KST) 기준으로 동작
+- `config.ts`의 `TIMEZONE`이 `process.env.TZ`를 읽으므로 모든 시간 관련 로직에 반영
+- `task-scheduler.ts`: 스케줄 태스크 결과를 동일 `group_folder`의 **모든 등록 채널**(Slack + Discord)에 브로드캐스트
+  - 기존: `deps.sendMessage(task.chat_jid, ...)` → 단일 채널만 발송
+  - 변경: `allGroupJids` 배열로 같은 folder의 모든 JID에 순회 발송
+  - 개별 채널 실패 시 `logger.warn`으로 기록, 다른 채널 발송은 계속 진행
+- DB: `나노클로-운영자(DC)` 채널의 folder를 `main-dc` → `main`으로 통합
+
+## 이전 변경사항 (2026-02-22)
+
+### registered_groups DB 스키마 수정 (16:25 UTC)
+- `src/db.ts`: `folder` 컬럼의 UNIQUE 제약 제거
+- Slack과 Discord 채널이 같은 그룹 폴더를 공유할 수 있도록 개선
+- JID가 PRIMARY KEY이므로 중복 방지는 유지
+- 멀티채널 운영 시 유연성 향상
+
+### Discord 채널 연동 (Slack 병행) — 07:28 UTC
 - `src/channels/discord.ts` 추가: Discord Gateway로 메시지 수신/발신
 - `src/config.ts`에 `DISCORD_BOT_TOKEN` 추가
 - `src/index.ts`에 Discord 채널 초기화 블록 추가 (Slack 뒤에 조건부 연결)
 - 디스코드 JID 형식: `dc:<channelId>` — `ownsJid()`로 Slack과 자동 구분
 - `나노클로-운영자(DC)` 채널 등록 (folder: `main-dc`, requires_trigger: 0)
 - Slack과 Discord 동시 운영 가능 (멀티채널 구조)
+
+### 스케줄 태스크 중복 실행 방지 — 02:24 UTC
+- `src/group-queue.ts`: GroupState에 `activeTaskId` 필드 추가
+- 실행 중인 태스크가 30분간 진행되는 동안 스케줄러 폴링이 next_run 미갱신 상태의 같은 태스크를 다시 enqueue하는 버그 수정
+- 실행 중 태스크도 중복 체크하여 동일 태스크가 동시에 여러 번 실행되지 않도록 보장
 
 ## 이전 변경사항 (2026-02-21)
 

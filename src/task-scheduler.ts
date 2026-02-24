@@ -101,6 +101,11 @@ async function runTask(
     }, IDLE_TIMEOUT);
   };
 
+  // Collect all JIDs sharing the same group_folder for broadcast
+  const allGroupJids = Object.entries(groups)
+    .filter(([, g]) => g.folder === task.group_folder)
+    .map(([jid]) => jid);
+
   try {
     const output = await runContainerAgent(
       group,
@@ -116,8 +121,14 @@ async function runTask(
       async (streamedOutput: ContainerOutput) => {
         if (streamedOutput.result) {
           result = streamedOutput.result;
-          // Forward result to user (sendMessage handles formatting)
-          await deps.sendMessage(task.chat_jid, streamedOutput.result);
+          // Broadcast result to all channels sharing the same group folder
+          for (const jid of allGroupJids) {
+            try {
+              await deps.sendMessage(jid, streamedOutput.result);
+            } catch (err) {
+              logger.warn({ taskId: task.id, jid, err }, 'Failed to broadcast task result to channel');
+            }
+          }
           // Only reset idle timer on actual results, not session-update markers
           resetIdleTimer();
         }
