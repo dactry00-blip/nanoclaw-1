@@ -376,6 +376,9 @@ function buildContainerArgs(mounts: VolumeMount[], containerName: string): strin
   // Explicitly set HOME so Claude Agent SDK writes to /home/node/.claude
   args.push('-e', 'HOME=/home/node');
 
+  // Pass host timezone to container
+  args.push('-e', `TZ=${process.env.TZ || 'Asia/Seoul'}`);
+
   // Docker: -v with :ro suffix for readonly
   for (const mount of mounts) {
     if (mount.readonly) {

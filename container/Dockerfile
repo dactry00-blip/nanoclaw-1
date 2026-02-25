@@ -25,6 +25,9 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Default timezone (overridden by host TZ env var at runtime)
+ENV TZ=Asia/Seoul
+
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium

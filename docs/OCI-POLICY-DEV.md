@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-24 22:55 KST
+**최종 업데이트**: 2026-02-26 00:05 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -44,6 +44,7 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 ### TZ=Asia/Seoul 설정 및 스케줄 태스크 멀티채널 브로드캐스트
 - `.env`에 `TZ=Asia/Seoul` 추가 → cron 스케줄러가 한국시간(KST) 기준으로 동작
 - `config.ts`의 `TIMEZONE`이 `process.env.TZ`를 읽으므로 모든 시간 관련 로직에 반영
+- `container/Dockerfile`에 `ENV TZ=Asia/Seoul` 기본값 설정, `container-runner.ts`에서 호스트 TZ를 `-e TZ=...`로 컨테이너에 전달 → 호스트·컨테이너 모두 KST 통일
 - `task-scheduler.ts`: 스케줄 태스크 결과를 동일 `group_folder`의 **모든 등록 채널**(Slack + Discord)에 브로드캐스트
   - 기존: `deps.sendMessage(task.chat_jid, ...)` → 단일 채널만 발송
   - 변경: `allGroupJids` 배열로 같은 folder의 모든 JID에 순회 발송
@@ -140,7 +141,7 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 - `buildVolumeMounts()`: 그룹별 마운트 구성
   - `DEV_MOUNT=true`일 때만 호스트 소스 마운트 (재컴파일 트리거)
 - `readSecrets()`: `.env`에서 API 키 + Threads 토큰 + `oauth-refresh.ts`에서 OAuth 토큰
-- `runContainerAgent()`: Docker 스폰, 레이턴시 계측 (`containerStartupMs`, `coldStartMs`)
+- `runContainerAgent()`: Docker 스폰, 레이턴시 계측 (`containerStartupMs`, `coldStartMs`), 호스트 TZ를 `-e TZ=...`로 컨테이너에 전달
 - `prewarmContainer()`: 시작 시 이미지 프리로드
 - `ContainerOutput` 인터페이스에 `progress` 필드 추가 (진행 상태 전달용)
 

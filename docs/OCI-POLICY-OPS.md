@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-24 22:55 KST
+**최종 업데이트**: 2026-02-26 00:05 KST
 
 ## 환경 정보
 
@@ -47,7 +47,7 @@ npm run build && node dist/index.js
 # ⚠️ ANTHROPIC_API_KEY로 하면 안 됨! OAuth보다 우선되어 크레딧 소진됨
 ANTHROPIC_API_KEY_FALLBACK=sk-ant-api03-...
 
-TZ=Asia/Seoul                    # 시간대 (cron 스케줄러, 로그 타임스탬프에 적용)
+TZ=Asia/Seoul                    # 시간대 (호스트 + 컨테이너 모두 적용)
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 DISCORD_BOT_TOKEN=MTQ3...      # Discord 봇 토큰 (없으면 Discord 비활성화)
@@ -179,6 +179,11 @@ docker ps --filter "name=nanoclaw-"
 ```bash
 docker ps --filter "name=nanoclaw-" -q | xargs -r docker stop
 ```
+
+### 컨테이너 시간대
+- `container/Dockerfile`에 `ENV TZ=Asia/Seoul` 기본값 설정
+- `container-runner.ts`가 호스트의 `TZ` 환경변수를 `-e TZ=...`로 컨테이너에 전달
+- 호스트·컨테이너 모두 KST로 통일 (로그 타임스탬프, cron 스케줄, Date 출력 등)
 
 ### 컨테이너 이미지 재빌드
 ```bash
