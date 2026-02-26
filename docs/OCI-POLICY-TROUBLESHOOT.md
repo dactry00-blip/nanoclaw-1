@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-26 00:05 KST
+**최종 업데이트**: 2026-02-26 23:10 KST
 
 ## Known Issues
 
@@ -24,6 +24,9 @@ Developer Portal의 User Token Generator로 발급한 토큰은 단기 토큰(1�
 
 ### 7. [FIXED] registered_groups folder UNIQUE 제약으로 멀티채널 등록 불가
 Slack과 Discord가 같은 그룹 폴더(`main`)를 공유하려 할 때 `folder` 컬럼의 UNIQUE 제약으로 인해 두 번째 채널 등록 실패. **Fix**: `src/db.ts`에서 `folder TEXT NOT NULL UNIQUE` → `folder TEXT NOT NULL`로 변경. JID가 PRIMARY KEY이므로 중복 방지는 유지되며, 여러 채널이 동일 폴더 공유 가능. (커밋: 0d11575, 2026-02-22 16:25 UTC)
+
+### 9. [FIXED] IPC `send_message`가 단일 채널에만 발송 (Discord 누락)
+IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지를 전송하고, 동일 `group_folder`의 다른 채널(Discord)에는 전달하지 않음. `task-scheduler.ts`는 이미 멀티채널 브로드캐스트를 구현했으나, `ipc.ts`의 `send_message` 경로는 누락. newsbot, threads daily 등 스케줄 태스크가 에이전트 내부에서 `send_message` IPC로 결과를 발송할 때 Discord 채널이 메시지를 받지 못함. **Fix**: `src/ipc.ts`의 `send_message` 핸들러를 동일 folder의 모든 JID에 브로드캐스트하도록 수정 (`task-scheduler.ts`와 동일 패턴).
 
 ### 8. [FIXED] Pro 구독 한도 초과 메시지 미감지로 fallback 실패
 "You've hit your limit · resets 7am (UTC)" 같은 Pro 구독 한도 초과 메시지가 기존 rate limit 패턴(`/\b(429|rate.?limit|...)\b/i`)에 매칭되지 않아 API key fallback이 트리거되지 않음. **Fix**: `src/container-runner.ts`의 `RATE_LIMIT_PATTERN`에 `hit your limit`, `hit .+ limit`, `resets \d+\w+\s*\(UTC\)` 패턴 추가. (커밋: d9384ea, 2026-02-24 23:12 KST)
@@ -56,6 +59,7 @@ Slack과 Discord가 같은 그룹 폴더(`main`)를 공유하려 할 때 `folder
 | `TZ` 미설정 (UTC 서버) | cron `0 9 * * *`가 KST 18:00에 실행 | `.env`에 `TZ=Asia/Seoul` 설정 (Dockerfile 기본값 + container-runner가 호스트 TZ를 컨테이너에 전달) |
 | 스케줄 태스크 `chat_jid` 단일 채널 | Slack만 발송, Discord 누락 | `task-scheduler.ts`에서 동일 folder의 모든 JID에 브로드캐스트 |
 | Discord 채널 folder를 별도로 설정 (`main-dc`) | 브로드캐스트 대상에서 제외 | Slack과 같은 folder 사용 (`main`) |
+| IPC `send_message`에서 `chatJid` 단일 발송 | Discord가 IPC 메시지 미수신 | 동일 folder의 모든 JID에 브로드캐스트 (`task-scheduler.ts`와 동일 패턴) |
 
 ### 🔴 DB/스키마 관련
 | 실수 | 결과 | 올바른 방법 |

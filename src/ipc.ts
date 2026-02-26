@@ -78,9 +78,24 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   isMain ||
                   (targetGroup && targetGroup.folder === sourceGroup)
                 ) {
-                  await deps.sendMessage(data.chatJid, data.text);
+                  // Broadcast to all channels sharing the same folder
+                  const senderFolder = targetGroup?.folder || sourceGroup;
+                  const broadcastJids = Object.entries(registeredGroups)
+                    .filter(([, g]) => g.folder === senderFolder)
+                    .map(([jid]) => jid);
+
+                  for (const jid of broadcastJids) {
+                    try {
+                      await deps.sendMessage(jid, data.text);
+                    } catch (err) {
+                      logger.warn(
+                        { jid, sourceGroup, err },
+                        'Failed to broadcast IPC message to channel',
+                      );
+                    }
+                  }
                   logger.info(
-                    { chatJid: data.chatJid, sourceGroup },
+                    { chatJid: data.chatJid, sourceGroup, broadcastCount: broadcastJids.length },
                     'IPC message sent',
                   );
                 } else {
