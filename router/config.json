@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "strategy": "hybrid",
+  "thresholds": {
+    "light": 0.2
+  },
+  "weights": {
+    "tokenCount": 0.08,
+    "codePresence": 0.14,
+    "reasoningMarkers": 0.18,
+    "technicalTerms": 0.10,
+    "creativeMarkers": 0.08,
+    "simpleIndicators": -0.06,
+    "multiStepPatterns": 0.12,
+    "questionComplexity": 0.09,
+    "imperativeVerbs": 0.05,
+    "constraints": 0.04,
+    "outputFormat": 0.03,
+    "domainSpecificity": 0.07,
+    "agenticTasks": 0.11,
+    "relayIndicators": 0.05
+  },
+  "monitoring": {
+    "logRouting": true,
+    "logBreakdown": true,
+    "metricsPath": "./logs/routing-metrics.jsonl"
+  }
+}

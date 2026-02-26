@@ -274,6 +274,64 @@ Use available_groups.json to find the JID for a group. The folder name should be
   },
 );
 
+server.tool(
+  'delegate_to_cheap_model',
+  `Delegate a simple subtask to a fast, cheap model (e.g. GPT-4o-mini) instead of doing it yourself.
+Use this for straightforward tasks like summarization, translation, simple Q&A, or formatting that don't require deep reasoning or code generation.
+The host process calls the Copilot API and returns the result.`,
+  {
+    subtask: z.string().describe('The prompt/instruction for the cheap model'),
+    reason: z.string().optional().describe('Why this subtask is suitable for delegation'),
+  },
+  async (args) => {
+    // Write delegation request via IPC
+    const data = {
+      type: 'delegate',
+      subtask: args.subtask,
+      reason: args.reason || undefined,
+      groupFolder,
+      timestamp: new Date().toISOString(),
+    };
+
+    writeIpcFile(TASKS_DIR, data);
+
+    // Poll for result from host (host writes delegation_result.json)
+    const resultPath = path.join(IPC_DIR, 'delegation_result.json');
+    const timeout = 30_000;
+    const interval = 500;
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+      try {
+        if (fs.existsSync(resultPath)) {
+          const raw = fs.readFileSync(resultPath, 'utf-8');
+          fs.unlinkSync(resultPath); // Clean up
+          const result = JSON.parse(raw);
+
+          if (result.status === 'success') {
+            return {
+              content: [{ type: 'text' as const, text: result.result }],
+            };
+          } else {
+            return {
+              content: [{ type: 'text' as const, text: `Delegation failed: ${result.error}` }],
+              isError: true,
+            };
+          }
+        }
+      } catch {
+        // File not ready yet, continue polling
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    return {
+      content: [{ type: 'text' as const, text: 'Delegation timed out after 30 seconds.' }],
+      isError: true,
+    };
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

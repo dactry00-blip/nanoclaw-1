@@ -41,6 +41,7 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { startIpcWatcher } from './ipc.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
+import { loadRouterConfig, routeMessage, callCopilotAPI } from './router.service.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
@@ -242,6 +243,35 @@ async function runAgent(
 ): Promise<'success' | 'error'> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
   const sessionId = sessions[group.folder];
+
+  // --- Router: determine LIGHT vs HEAVY tier ---
+  try {
+    const routerConfig = loadRouterConfig();
+    if (routerConfig.enabled) {
+      const routing = routeMessage(prompt, routerConfig);
+      logger.info(
+        { group: group.name, tier: routing.tier, score: routing.score.toFixed(3) },
+        'Routing decision',
+      );
+
+      if (routing.tier === 'LIGHT') {
+        try {
+          const response = await callCopilotAPI(prompt);
+          if (onOutput) {
+            await onOutput({ status: 'success', result: response });
+          }
+          return 'success';
+        } catch (err) {
+          logger.warn({ err }, 'Copilot API failed, falling through to HEAVY (Claude)');
+          // Fall through to HEAVY path below
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Router error, falling through to HEAVY (Claude)');
+  }
+
+  // --- HEAVY path: Claude container agent ---
 
   // Update tasks snapshot for container to read (filtered by group)
   const tasks = getAllTasks();

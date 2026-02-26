@@ -177,6 +177,9 @@ export async function processTaskIpc(
     groupFolder?: string;
     chatJid?: string;
     targetJid?: string;
+    // For delegate
+    subtask?: string;
+    reason?: string;
     // For register_group
     jid?: string;
     name?: string;
@@ -387,6 +390,32 @@ export async function processTaskIpc(
         );
       }
       break;
+
+    case 'delegate': {
+      // Delegation from container: call Copilot API and write result back
+      if (data.subtask) {
+        const resultPath = path.join(
+          DATA_DIR, 'ipc', sourceGroup, 'delegation_result.json',
+        );
+        try {
+          const { callCopilotAPI } = await import('./router.service.js');
+          const response = await callCopilotAPI(data.subtask);
+          fs.writeFileSync(
+            resultPath,
+            JSON.stringify({ status: 'success', result: response }),
+          );
+          logger.info({ sourceGroup }, 'Delegation completed via Copilot');
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          fs.writeFileSync(
+            resultPath,
+            JSON.stringify({ status: 'error', error: errMsg }),
+          );
+          logger.warn({ sourceGroup, err }, 'Delegation to Copilot failed');
+        }
+      }
+      break;
+    }
 
     default:
       logger.warn({ type: data.type }, 'Unknown IPC task type');
