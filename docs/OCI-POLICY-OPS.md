@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-26 23:10 KST
+**최종 업데이트**: 2026-02-27 08:40 KST
 
 ## 환경 정보
 
@@ -53,6 +53,8 @@ SLACK_APP_TOKEN=xapp-...
 DISCORD_BOT_TOKEN=MTQ3...      # Discord 봇 토큰 (없으면 Discord 비활성화)
 ASSISTANT_NAME=폴
 TRIGGER_PATTERN=^@폴
+COPILOT_API_URL=http://localhost:8080  # Router LIGHT tier용 Copilot API 엔드포인트
+COPILOT_MODEL=gpt-4o-mini             # Copilot API 모델명 (OpenAI-compatible)
 THREADS_ACCESS_TOKEN=...       # Threads API 장기 토큰 (threads 그룹용, 60일 유효)
 THREADS_USER_ID=...            # Threads 사용자 ID
 THREADS_APP_ID=...             # Threads 앱 ID (토큰 갱신용)
@@ -228,6 +230,7 @@ ps aux | grep 'node.*index' | grep -v grep  # 실행 중인 프로세스
 | 서비스 크래시 재시작 | 즉시 | 5초 후 자동 |
 | OAuth 토큰 갱신 | 만료 5분 전 | 자동 (platform.claude.com) |
 | Threads 토큰 갱신 | 만료 7일 전 | 자동 (graph.threads.net, 60일 주기) |
+| 라우팅 메트릭 기록 | 매 메시지 | `logs/routing-metrics.jsonl` |
 
 ## 주의사항
 

@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-26 23:10 KST
+**최종 업데이트**: 2026-02-27 08:40 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -8,8 +8,11 @@
 
 ```
 User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [즉시 wake]
-  → GroupQueue → container-runner → Docker Container (pre-built dist)
-    → agent-runner → Claude Agent SDK → Claude API
+  → GroupQueue → runAgent() → OpenClaw Router (14차원 분석)
+    → LIGHT (score < 0.2): Copilot API → 즉시 응답 (실패 시 HEAVY fallback)
+    → HEAVY (score >= 0.2): container-runner → Docker Container (pre-built dist)
+      → agent-runner → Claude Agent SDK → Claude API
+        → delegate_to_cheap_model MCP 도구로 단순 하위작업 Copilot 위임 가능
   → streaming output → Channel.sendMessage → User
 ```
 
@@ -39,7 +42,26 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 - 죽은 프로세스의 stale lock은 자동 회수
 - 워커 컨테이너에는 영향 없음
 
-## 최근 변경사항 (2026-02-26)
+## 최근 변경사항 (2026-02-27)
+
+### OpenClaw 14차원 Router 통합 — LIGHT/HEAVY 분기 및 Delegation Tool
+- **라우터 통합**: 메시지 복잡도를 14개 차원(토큰 수, 코드 존재, 추론 마커, 기술 용어 등)으로 분석하여 LIGHT(Copilot) 또는 HEAVY(Claude 컨테이너)로 분기
+  - `src/router/openclaw-router.ts`, `src/router/types.ts`: 라우터 코어 (router/ → src/router/ 이동)
+  - `src/router.service.ts`: 설정 로드(`loadRouterConfig`), 라우팅(`routeMessage`), Copilot API 호출(`callCopilotAPI`)
+  - `router/config.json`: 가중치, 임계값(0.2), 메트릭 경로 설정 (런타임에 fs로 읽음)
+- **`src/index.ts` 수정**: `runAgent()` 시작부에 라우팅 분기 삽입
+  - LIGHT → `callCopilotAPI()` 호출, 성공 시 `onOutput({ status: 'success', result })` 반환
+  - Copilot 실패 시 `logger.warn` + HEAVY fallthrough (Claude 컨테이너 기존 로직)
+  - 라우터 자체 에러도 HEAVY fallthrough (안전 우선)
+- **Delegation Tool**: 컨테이너 내부에서 단순 하위작업을 Copilot에 위임
+  - `container/agent-runner/src/ipc-mcp-stdio.ts`: `delegate_to_cheap_model` MCP 도구 추가
+  - IPC 파일 작성 → 호스트가 Copilot API 호출 → `delegation_result.json` 작성 → 컨테이너가 30초간 polling
+  - `src/ipc.ts`: `case 'delegate'` 핸들러 추가, `callCopilotAPI` dynamic import
+- **환경변수**: `.env`에 `COPILOT_API_URL=http://localhost:8080`, `COPILOT_MODEL=gpt-4o-mini` 추가
+- **메트릭**: `logs/routing-metrics.jsonl`에 라우팅 결과 기록 (타임스탬프, 프롬프트, tier, score, breakdown)
+- **현재 상태**: Copilot API 서버 미구축 → LIGHT 판정 시에도 실패 → Claude fallback으로 동작
+
+## 이전 변경사항 (2026-02-26)
 
 ### IPC `send_message` 멀티채널 브로드캐스트 수정
 - `src/ipc.ts`: IPC `send_message` 핸들러가 발신 `chatJid`(단일 채널)에만 메시지를 전송하던 버그 수정
@@ -121,11 +143,21 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 
 ## 주요 파일별 역할
 
+### src/router.service.ts (라우터 서비스)
+- `loadRouterConfig()`: `router/config.json` 읽기 (없으면 기본값 fallback)
+- `routeMessage(prompt, config)`: OpenClawRouter 인스턴스 생성, `.route()` 호출, 메트릭 JSONL 기록
+- `callCopilotAPI(prompt)`: OpenAI-compatible `/v1/chat/completions` 호출 (`COPILOT_API_URL` + `COPILOT_MODEL`)
+
+### src/router/ (OpenClaw 라우터 코어)
+- `openclaw-router.ts`: 14차원 분석 엔진 (tokenCount, codePresence, reasoningMarkers 등)
+- `types.ts`: RouterConfig, RoutingResult, RouterWeights 등 타입 정의
+
 ### src/index.ts (오케스트레이터)
 - `acquireSingletonLock()`: PID lock으로 중복 실행 방지
 - `main()`: Docker 확인 → DB 초기화 → 채널 연결 → 서브시스템 시작
 - `startMessageLoop()`: 이벤트 기반 wake + 500ms fallback 폴링
 - `notifyNewMessage()`: 메시지 수신 시 즉시 루프 깨우기
+- `runAgent()`: **라우터 분기 포함** — LIGHT → Copilot API, HEAVY → 컨테이너 (실패 시 HEAVY fallthrough)
 - `processGroupMessages()`: 그룹 메시지 수집 → 컨테이너 실행 → 결과 전송
   - **진행 상태 처리**: `result.progress`가 있으면 `channel.updateTyping()` 호출하여 타이핑 메시지 업데이트
 
@@ -173,6 +205,7 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 ### src/ipc.ts (IPC 메시지 처리)
 - IPC 파일 감시로 컨테이너 ↔ 호스트 간 메시지 교환
 - `send_message` 핸들러: 동일 `group_folder`의 모든 등록 채널에 브로드캐스트 (Slack + Discord)
+- `delegate` 핸들러: 컨테이너의 delegation 요청 → `callCopilotAPI()` 호출 → `delegation_result.json` 작성
 - `create_task`, `update_task` 등 태스크 관련 IPC 처리
 
 ### src/group-queue.ts (큐 관리)

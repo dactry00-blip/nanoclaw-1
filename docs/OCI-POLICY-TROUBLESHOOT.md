@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-26 23:10 KST
+**최종 업데이트**: 2026-02-27 08:40 KST
 
 ## Known Issues
 
@@ -31,6 +31,17 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 ### 8. [FIXED] Pro 구독 한도 초과 메시지 미감지로 fallback 실패
 "You've hit your limit · resets 7am (UTC)" 같은 Pro 구독 한도 초과 메시지가 기존 rate limit 패턴(`/\b(429|rate.?limit|...)\b/i`)에 매칭되지 않아 API key fallback이 트리거되지 않음. **Fix**: `src/container-runner.ts`의 `RATE_LIMIT_PATTERN`에 `hit your limit`, `hit .+ limit`, `resets \d+\w+\s*\(UTC\)` 패턴 추가. (커밋: d9384ea, 2026-02-24 23:12 KST)
 
+### 10. Router LIGHT 판정이지만 Copilot 미응답
+- **상태**: 정상 (현재 Copilot API 서버 미구축)
+- `COPILOT_API_URL=http://localhost:8080` 설정이지만 서버 미실행 → `callCopilotAPI()` 실패 → Claude HEAVY fallthrough
+- 로그에 `Copilot API failed, falling through to HEAVY (Claude)` 경고가 나타남
+- Copilot 서버를 구축하면 자동으로 LIGHT 응답 활성화
+
+### 11. Delegation 30초 타임아웃
+- 컨테이너의 `delegate_to_cheap_model` MCP 도구가 `delegation_result.json`을 30초간 polling
+- 호스트 IPC 처리(`ipc.ts`)가 지연되면 타임아웃 발생 가능
+- IPC_POLL_INTERVAL(1초)을 감안하면 정상적으로는 2~5초 내 완료
+
 ## 교훈 (실수 반복 방지)
 
 ### 🔴 토큰/인증 관련
@@ -60,6 +71,13 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 | 스케줄 태스크 `chat_jid` 단일 채널 | Slack만 발송, Discord 누락 | `task-scheduler.ts`에서 동일 folder의 모든 JID에 브로드캐스트 |
 | Discord 채널 folder를 별도로 설정 (`main-dc`) | 브로드캐스트 대상에서 제외 | Slack과 같은 folder 사용 (`main`) |
 | IPC `send_message`에서 `chatJid` 단일 발송 | Discord가 IPC 메시지 미수신 | 동일 folder의 모든 JID에 브로드캐스트 (`task-scheduler.ts`와 동일 패턴) |
+
+### 🔴 라우터 관련
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| `COPILOT_API_URL` 미설정 | `callCopilotAPI()` 즉시 에러 → HEAVY fallthrough | `.env`에 URL 설정 또는 `router/config.json`에서 `enabled: false` |
+| `router/config.json` 삭제 | 기본 가중치로 fallback (동작은 함) | 삭제하지 말고 `enabled: false`로 비활성화 |
+| Delegation result 파일 미삭제 | 다음 delegation에서 이전 결과 읽음 | 컨테이너가 읽은 후 `fs.unlinkSync`로 삭제 (이미 구현됨) |
 
 ### 🔴 DB/스키마 관련
 | 실수 | 결과 | 올바른 방법 |
