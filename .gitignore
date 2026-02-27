@@ -23,6 +23,7 @@ groups/threads/*
 
 # Secrets
 *.keys.json
+.env
 
 # Debug/test logs
 *.log
