@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-27 19:15 KST
+**최종 업데이트**: 2026-02-28 02:40 KST
 
 ## 환경 정보
 
@@ -271,6 +271,101 @@ remote: https://github.com/dactry00-blip/nanoclaw-1.git (fork)
 upstream: https://github.com/gavrielc/nanoclaw.git (원본)
 ```
 
+## OpenClaw (별도 Docker 컨테이너)
+
+NanoClaw와 독립적으로 운영되는 AI 에이전트 프레임워크. 별도 Docker Compose 스택으로 실행.
+
+### 구성
+
+| 항목 | 값 |
+|------|------|
+| **소스 경로** | `/home/ubuntu/openclaw` |
+| **설정 경로** | `~/.openclaw/` |
+| **컨테이너** | `openclaw-openclaw-gateway-1` |
+| **이미지** | `openclaw:local` (소스 빌드) |
+| **게이트웨이 포트** | 18789 (Control UI) |
+| **브릿지 포트** | 18790 |
+| **AI Provider** | GitHub Copilot Pro (device flow 인증) |
+| **기본 모델** | `github-copilot/gpt-4o` |
+| **Discord 봇** | `@오픈클로봇-J` (ID: 1476928870430277853) |
+| **보안 플러그인** | SecureClaw v2.2.0 |
+| **보안 점수** | 64/100 (Critical 0, HIGH 2, MED 3) |
+
+### 실행 방법
+
+```bash
+cd /home/ubuntu/openclaw
+
+# 시작
+docker compose up -d openclaw-gateway
+
+# 중지
+docker compose down
+
+# 재시작
+docker compose restart openclaw-gateway
+
+# 로그
+docker logs --tail 30 openclaw-openclaw-gateway-1
+
+# 채널 상태
+docker exec openclaw-openclaw-gateway-1 openclaw channels status
+
+# 모델 변경
+docker exec openclaw-openclaw-gateway-1 openclaw models set github-copilot/<모델명>
+
+# 설정 변경
+docker exec openclaw-openclaw-gateway-1 openclaw config set <key> <value> --json
+```
+
+### Control UI 접근
+
+- **로컬 접근** (SSH 터널 필요): `ssh -i <키파일> -L 18789:127.0.0.1:18789 ubuntu@140.245.55.36` → `http://localhost:18789/`
+- **게이트웨이 토큰**: `.env`의 `OPENCLAW_GATEWAY_TOKEN` 값 사용
+- HTTPS가 아닌 외부 IP 접속 시 "device identity" 에러 발생 → SSH 터널로 localhost 접속 필수
+
+### GitHub Copilot 토큰 갱신
+
+```bash
+# TTY 필요 — SSH 터미널에서 직접 실행
+docker exec -it openclaw-openclaw-gateway-1 openclaw models auth login-github-copilot
+
+# 토큰 확인
+docker exec openclaw-openclaw-gateway-1 cat /home/node/.openclaw/credentials/github-copilot.token.json
+```
+
+### SecureClaw 보안 감사/강화
+
+```bash
+# 감사
+docker exec openclaw-openclaw-gateway-1 bash /home/node/.openclaw/skills/secureclaw/scripts/quick-audit.sh
+
+# 하드닝
+docker exec openclaw-openclaw-gateway-1 bash /home/node/.openclaw/skills/secureclaw/scripts/quick-harden.sh
+```
+
+### Discord 설정
+
+- **groupPolicy**: `allowlist` (허용된 서버/유저만 응답)
+- **dmPolicy**: `pairing` (DM은 페어링 승인 필요)
+- **허용 서버**: `1474960238900674892`
+- **허용 유저**: `1277258344985264245`
+- 서버 채널: `@오픈클로봇-J` 멘션 필요
+- DM: 멘션 없이 응답
+
+### 사용 가능한 GitHub Copilot 모델 (21종)
+
+Claude (opus-4.6, opus-4.5, sonnet-4.6, sonnet-4.5, sonnet-4, haiku-4.5), GPT (5.2-codex, 5.2, 5.1-codex-max, 5.1-codex, 5.1, 5, 5-mini, 4.1, 4o), Gemini (3.1-pro, 3-pro, 3-flash, 2.5-pro), grok-code-fast-1
+
+### ⚠️ 주의사항
+
+- NanoClaw와 **포트 충돌 없음** (NanoClaw는 포트 미사용, Socket Mode)
+- OpenClaw 게이트웨이는 **RAM ~1.5GB** 사용 (서버 23GB 중)
+- 컨테이너 내부 uid=1000(node), 호스트 uid=1001 → 권한 문제 시 `sudo chown -R 1000:1000 ~/.openclaw`
+- `openclaw.json`에 OpenClaw 스키마에 없는 키 추가 시 게이트웨이 시작 실패
+- OCI Security List에서 포트 18789 인바운드 허용됨
+- iptables에 18789 허용 규칙 추가됨 (`/etc/iptables/rules.v4`에 저장)
+
 ## 서버 스펙
 
 | 항목 | 값 |
@@ -278,7 +373,7 @@ upstream: https://github.com/gavrielc/nanoclaw.git (원본)
 | OS | Ubuntu 22.04 LTS |
 | RAM | 23GB |
 | Swap | 2GB |
-| Disk | 45GB (17% 사용) |
+| Disk | 45GB (32% 사용) |
 | Node.js | v20.20.0 |
 | Docker | active |
-| 방화벽 | OCI Security List |
+| 방화벽 | OCI Security List + iptables (22, 18789) |

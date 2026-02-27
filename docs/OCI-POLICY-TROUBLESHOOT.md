@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-27 19:15 KST
+**최종 업데이트**: 2026-02-28 02:40 KST
 
 ## Known Issues
 
@@ -335,6 +335,92 @@ cd /home/ubuntu/nanoclaw && npm run build && sudo systemctl restart nanoclaw
 # 컨테이너 이미지도 변경한 경우
 cd /home/ubuntu/nanoclaw && npm run build && ./container/build.sh && sudo systemctl restart nanoclaw
 ```
+
+## OpenClaw 트러블슈팅
+
+### 증상: 게이트웨이 시작 실패 (restart loop)
+
+```bash
+# 로그 확인
+docker logs openclaw-openclaw-gateway-1
+
+# "Missing config" → gateway.mode 설정 필요
+docker exec openclaw-openclaw-gateway-1 openclaw config set gateway.mode local
+
+# "Unrecognized keys" → openclaw.json에 스키마 외 키 존재
+# 호스트에서 직접 수정 (sudo 필요, uid=1000)
+sudo python3 -c "
+import json
+with open('/home/ubuntu/.openclaw/openclaw.json') as f: cfg = json.load(f)
+cfg.pop('잘못된키', None)
+with open('/home/ubuntu/.openclaw/openclaw.json','w') as f: json.dump(cfg, f, indent=2)
+"
+sudo chown 1000:1000 /home/ubuntu/.openclaw/openclaw.json
+
+# "non-loopback Control UI requires allowedOrigins"
+docker exec openclaw-openclaw-gateway-1 openclaw config set gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback true --json
+```
+
+### 증상: Discord 메시지 무응답
+
+```bash
+# 채널 상태 확인
+docker exec openclaw-openclaw-gateway-1 openclaw channels status
+
+# groupPolicy가 allowlist인데 서버 미등록 → 서버/유저 ID 등록
+docker exec openclaw-openclaw-gateway-1 openclaw config set 'channels.discord.guilds' \
+  '{"서버ID":{"requireMention":true,"users":["유저ID"]}}' --json
+
+# 페어링 대기 중 → 승인
+docker exec openclaw-openclaw-gateway-1 openclaw pairing list
+docker exec openclaw-openclaw-gateway-1 openclaw pairing approve discord <코드>
+```
+
+### 증상: Control UI "device identity" 에러
+
+- HTTP + 외부 IP 접속 시 발생 (Secure Context 필요)
+- **해결**: SSH 터널로 localhost 접속
+  ```bash
+  ssh -i <키파일> -L 18789:127.0.0.1:18789 ubuntu@140.245.55.36
+  # 브라우저: http://localhost:18789/
+  ```
+
+### 증상: Control UI "unauthorized: gateway token missing"
+
+- 게이트웨이 토큰 입력 필요
+- `.env`의 `OPENCLAW_GATEWAY_TOKEN` 값을 UI Settings에 붙여넣기
+- 또는 URL에 토큰 포함: `http://localhost:18789/?token=<토큰>`
+
+### 증상: Control UI "pairing required"
+
+```bash
+docker exec openclaw-openclaw-gateway-1 openclaw devices list
+docker exec openclaw-openclaw-gateway-1 openclaw devices approve <requestId>
+```
+
+### 증상: GitHub Copilot 토큰 sku=free_limited_copilot
+
+- Pro 구독 활성화 직후 토큰 갱신해도 반영 지연될 수 있음
+- GitHub 계정에서 구독 상태 확인: github.com/settings/copilot
+- 수 분 후 재인증하면 반영됨
+
+### 증상: 권한 에러 (EACCES)
+
+```bash
+# OpenClaw 디렉토리 권한 수정
+sudo chown -R 1000:1000 /home/ubuntu/.openclaw
+# 또는 긴급 시
+sudo chmod -R 777 /home/ubuntu/.openclaw
+```
+
+### 🔴 OpenClaw 교훈
+
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| `openclaw.json`에 스키마 외 키 추가 | 게이트웨이 시작 실패 (restart loop) | `openclaw config set`으로만 설정 변경 |
+| `groupPolicy: allowlist`인데 guild 미등록 | 서버 채널 메시지 전부 무시 | `guilds`에 서버ID + 유저ID 등록 |
+| HTTP 외부 IP로 Control UI 접속 | "device identity" 에러 | SSH 터널로 localhost 접속 |
+| `chmod 777`로 디렉토리 권한 설정 | SecureClaw 감사 FAIL | `chown 1000:1000` + `chmod 700` 사용 |
 
 ## Session Transcript Branching
 
