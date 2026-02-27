@@ -93,15 +93,21 @@ export function routeMessage(prompt: string, config: RouterConfig): RoutingResul
 export async function callCopilotAPI(prompt: string): Promise<string> {
   const baseUrl = process.env.COPILOT_API_URL;
   const model = process.env.COPILOT_MODEL || 'gpt-4o-mini';
+  const apiKey = process.env.COPILOT_API_KEY;
 
   if (!baseUrl) {
     throw new Error('COPILOT_API_URL not configured');
   }
 
   const url = `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: prompt }],

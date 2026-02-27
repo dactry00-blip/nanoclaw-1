@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-27 08:40 KST
+**최종 업데이트**: 2026-02-27 19:15 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -57,9 +57,9 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
   - `container/agent-runner/src/ipc-mcp-stdio.ts`: `delegate_to_cheap_model` MCP 도구 추가
   - IPC 파일 작성 → 호스트가 Copilot API 호출 → `delegation_result.json` 작성 → 컨테이너가 30초간 polling
   - `src/ipc.ts`: `case 'delegate'` 핸들러 추가, `callCopilotAPI` dynamic import
-- **환경변수**: `.env`에 `COPILOT_API_URL=http://localhost:8080`, `COPILOT_MODEL=gpt-4o-mini` 추가
+- **환경변수**: `.env`에 `COPILOT_API_URL=http://localhost:4141`, `COPILOT_MODEL=gpt-4o-mini` 설정
 - **메트릭**: `logs/routing-metrics.jsonl`에 라우팅 결과 기록 (타임스탬프, 프롬프트, tier, score, breakdown)
-- **현재 상태**: Copilot API 서버 미구축 → LIGHT 판정 시에도 실패 → Claude fallback으로 동작
+- **현재 상태**: `copilot-api` 프록시 서버 구축 완료 → LIGHT 판정 시 Copilot API로 즉시 응답 활성화
 
 ## 이전 변경사항 (2026-02-26)
 
@@ -146,7 +146,7 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 ### src/router.service.ts (라우터 서비스)
 - `loadRouterConfig()`: `router/config.json` 읽기 (없으면 기본값 fallback)
 - `routeMessage(prompt, config)`: OpenClawRouter 인스턴스 생성, `.route()` 호출, 메트릭 JSONL 기록
-- `callCopilotAPI(prompt)`: OpenAI-compatible `/v1/chat/completions` 호출 (`COPILOT_API_URL` + `COPILOT_MODEL`)
+- `callCopilotAPI(prompt)`: OpenAI-compatible `/v1/chat/completions` 호출 (`copilot-api` 프록시 @ `localhost:4141`)
 
 ### src/router/ (OpenClaw 라우터 코어)
 - `openclaw-router.ts`: 14차원 분석 엔진 (tokenCount, codePresence, reasoningMarkers 등)

@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-27 08:40 KST
+**최종 업데이트**: 2026-02-27 19:15 KST
 
 ## 환경 정보
 
@@ -53,8 +53,9 @@ SLACK_APP_TOKEN=xapp-...
 DISCORD_BOT_TOKEN=MTQ3...      # Discord 봇 토큰 (없으면 Discord 비활성화)
 ASSISTANT_NAME=폴
 TRIGGER_PATTERN=^@폴
-COPILOT_API_URL=http://localhost:8080  # Router LIGHT tier용 Copilot API 엔드포인트
-COPILOT_MODEL=gpt-4o-mini             # Copilot API 모델명 (OpenAI-compatible)
+COPILOT_API_URL=http://localhost:4141  # copilot-api 프록시 (GitHub Copilot → OpenAI-compatible)
+COPILOT_MODEL=gpt-4o-mini             # Copilot API 모델명 (gpt-4o-mini, gpt-4.1, gpt-5-mini 등 선택 가능)
+COPILOT_API_KEY=dummy                 # copilot-api 프록시는 자체 인증, 값은 아무거나
 THREADS_ACCESS_TOKEN=...       # Threads API 장기 토큰 (threads 그룹용, 60일 유효)
 THREADS_USER_ID=...            # Threads 사용자 ID
 THREADS_APP_ID=...             # Threads 앱 ID (토큰 갱신용)
@@ -195,6 +196,24 @@ docker builder prune -af    # 캐시 정리 (선택)
 
 Docker 빌드 캐시는 매주 일요일 04:00에 자동 정리됩니다.
 
+## Copilot API 프록시 서비스
+
+GitHub Copilot 구독을 OpenAI-compatible API로 노출하는 `copilot-api` 프록시 서버.
+Router의 LIGHT tier 요청을 처리합니다.
+
+```bash
+sudo systemctl status copilot-api    # 상태 확인
+sudo systemctl restart copilot-api   # 재시작
+sudo journalctl -u copilot-api -f    # 실시간 로그
+```
+
+- **포트**: 4141 (`http://localhost:4141`)
+- **인증**: GitHub Copilot 토큰 (`~/.local/share/copilot-api/github_token`)
+- **Rate limit**: `--rate-limit 10 --wait` (10초 간격, 초과 시 대기)
+- **사용 가능 모델**: gpt-4o-mini, gpt-4.1, gpt-5-mini, claude-haiku-4.5 등 30종
+- **서비스 파일**: `copilot-api.service`
+- **GitHub 인증 재설정**: `copilot-api auth` (디바이스 플로우)
+
 ## 싱글턴 가드
 
 호스트 프로세스가 중복 실행되면 슬랙 메시지에 여러 번 응답하는 문제가 발생합니다.
@@ -231,6 +250,7 @@ ps aux | grep 'node.*index' | grep -v grep  # 실행 중인 프로세스
 | OAuth 토큰 갱신 | 만료 5분 전 | 자동 (platform.claude.com) |
 | Threads 토큰 갱신 | 만료 7일 전 | 자동 (graph.threads.net, 60일 주기) |
 | 라우팅 메트릭 기록 | 매 메시지 | `logs/routing-metrics.jsonl` |
+| Copilot 프록시 서비스 | 상시 | `copilot-api.service` (port 4141) |
 
 ## 주의사항
 

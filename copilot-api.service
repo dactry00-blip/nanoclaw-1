@@ -1,0 +1,16 @@
+[Unit]
+Description=Copilot API Proxy (OpenAI-compatible)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nanoclaw
+ExecStart=/usr/bin/copilot-api start --port 4141 --rate-limit 10 --wait
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

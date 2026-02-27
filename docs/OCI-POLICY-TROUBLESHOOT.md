@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-27 08:40 KST
+**최종 업데이트**: 2026-02-27 19:15 KST
 
 ## Known Issues
 
@@ -31,11 +31,12 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 ### 8. [FIXED] Pro 구독 한도 초과 메시지 미감지로 fallback 실패
 "You've hit your limit · resets 7am (UTC)" 같은 Pro 구독 한도 초과 메시지가 기존 rate limit 패턴(`/\b(429|rate.?limit|...)\b/i`)에 매칭되지 않아 API key fallback이 트리거되지 않음. **Fix**: `src/container-runner.ts`의 `RATE_LIMIT_PATTERN`에 `hit your limit`, `hit .+ limit`, `resets \d+\w+\s*\(UTC\)` 패턴 추가. (커밋: d9384ea, 2026-02-24 23:12 KST)
 
-### 10. Router LIGHT 판정이지만 Copilot 미응답
-- **상태**: 정상 (현재 Copilot API 서버 미구축)
-- `COPILOT_API_URL=http://localhost:8080` 설정이지만 서버 미실행 → `callCopilotAPI()` 실패 → Claude HEAVY fallthrough
-- 로그에 `Copilot API failed, falling through to HEAVY (Claude)` 경고가 나타남
-- Copilot 서버를 구축하면 자동으로 LIGHT 응답 활성화
+### 10. [FIXED] Router LIGHT 판정이지만 Copilot 미응답
+- **상태**: 해결됨 (`copilot-api` 프록시 서버 구축 완료, 2026-02-27)
+- `copilot-api` npm 패키지를 글로벌 설치하고 systemd 서비스(`copilot-api.service`)로 등록
+- `COPILOT_API_URL=http://localhost:4141`로 연결, GitHub Copilot 디바이스 인증 완료
+- LIGHT 판정 시 `gpt-4o-mini` 등 Copilot 모델로 즉시 응답 활성화
+- **Copilot 프록시 다운 시**: 기존대로 Claude HEAVY fallthrough 동작 (안전)
 
 ### 11. Delegation 30초 타임아웃
 - 컨테이너의 `delegate_to_cheap_model` MCP 도구가 `delegation_result.json`을 30초간 polling
@@ -75,7 +76,9 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 ### 🔴 라우터 관련
 | 실수 | 결과 | 올바른 방법 |
 |------|------|------------|
-| `COPILOT_API_URL` 미설정 | `callCopilotAPI()` 즉시 에러 → HEAVY fallthrough | `.env`에 URL 설정 또는 `router/config.json`에서 `enabled: false` |
+| `COPILOT_API_URL` 미설정 | `callCopilotAPI()` 즉시 에러 → HEAVY fallthrough | `.env`에 `COPILOT_API_URL=http://localhost:4141` 설정 |
+| `copilot-api` 서비스 다운 | LIGHT 요청 실패 → HEAVY fallthrough | `sudo systemctl restart copilot-api` |
+| GitHub Copilot 토큰 만료 | 401 에러 → HEAVY fallthrough | `copilot-api auth`로 재인증 |
 | `router/config.json` 삭제 | 기본 가중치로 fallback (동작은 함) | 삭제하지 말고 `enabled: false`로 비활성화 |
 | Delegation result 파일 미삭제 | 다음 delegation에서 이전 결과 읽음 | 컨테이너가 읽은 후 `fs.unlinkSync`로 삭제 (이미 구현됨) |
 
@@ -109,6 +112,27 @@ sudo systemctl restart nanoclaw
 | `THAASI...` (짧음) | 단기 토큰 | 1시간 |
 | `THAASI...` (긴 것) | 장기 토큰 | 60일 |
 | `앱ID\|해시` | 앱 토큰 | API 호출 불가 |
+
+## Copilot API 프록시 트러블슈팅
+
+```bash
+# 1. 서비스 상태
+sudo systemctl status copilot-api
+
+# 2. API 응답 테스트
+curl -s http://localhost:4141/v1/models | python3 -m json.tool | head -5
+
+# 3. 채팅 테스트
+curl -s http://localhost:4141/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}' | python3 -m json.tool
+
+# 4. GitHub 토큰 재인증 (만료 시)
+copilot-api auth
+
+# 5. 사용량 확인
+curl -s http://localhost:4141/usage | python3 -m json.tool
+```
 
 ## Quick Status Check (OCI / Linux)
 
