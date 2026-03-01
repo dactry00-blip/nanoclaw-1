@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-03-01 KST
+**최종 업데이트**: 2026-03-01 20:00 KST
 
 ## 환경 정보
 
@@ -250,6 +250,8 @@ ps aux | grep 'node.*index' | grep -v grep  # 실행 중인 프로세스
 | 로그 로테이션 | 매일 | logrotate |
 | 오래된 로그 삭제 (14일+) | 매일 | 03:00 |
 | Docker 빌드 캐시 정리 | 매주 일요일 | 04:00 |
+| 나노클로 GitHub 백업 | 매일 | 05:00 (`nanoclaw-1` repo) |
+| 오픈클로 GitHub 백업 | 매일 | 05:05 (`openclaw-backup` repo, private) |
 | 서비스 크래시 재시작 | 즉시 | 5초 후 자동 |
 | OAuth 토큰 갱신 | 만료 5분 전 | 자동 (platform.claude.com) |
 | Threads 토큰 갱신 | 만료 7일 전 | 자동 (graph.threads.net, 60일 주기) |
@@ -289,8 +291,9 @@ NanoClaw와 독립적으로 운영되는 AI 에이전트 프레임워크. 별도
 | **이미지** | `openclaw:local` (소스 빌드) |
 | **게이트웨이 포트** | 18789 (Control UI) |
 | **브릿지 포트** | 18790 |
-| **AI Provider** | GitHub Copilot Pro (device flow 인증) |
-| **기본 모델** | `github-copilot/gpt-4o` |
+| **AI Provider** | OpenAI Codex OAuth (ChatGPT Plus) + GitHub Copilot Pro (폴백) |
+| **기본 모델** | `openai-codex/gpt-5.1` |
+| **폴백 모델** | `github-copilot/gpt-5-mini` |
 | **Discord 봇** | `@오픈클로봇-J` (ID: 1476928870430277853) |
 | **보안 플러그인** | SecureClaw v2.2.0 |
 | **보안 점수** | 64/100 (Critical 0, HIGH 2, MED 3) |
@@ -324,11 +327,38 @@ docker exec openclaw-openclaw-gateway-1 openclaw config set <key> <value> --json
 
 ### Control UI 접근
 
-- **로컬 접근** (SSH 터널 필요): `ssh -i <키파일> -L 18789:127.0.0.1:18789 ubuntu@140.245.55.36` → `http://localhost:18789/`
-- **게이트웨이 토큰**: `.env`의 `OPENCLAW_GATEWAY_TOKEN` 값 사용
-- HTTPS가 아닌 외부 IP 접속 시 "device identity" 에러 발생 → SSH 터널로 localhost 접속 필수
+- **외부 접근 (Cloudflare Tunnel)**: `https://openclawj.bfreeai.us` (HTTPS 자동, 기기 페어링 필요)
+- **로컬 접근** (SSH 터널): `ssh -i <키파일> -L 18789:127.0.0.1:18789 ubuntu@140.245.55.36` → `http://localhost:18789/`
+- **게이트웨이 토큰**: `.env`의 `OPENCLAW_GATEWAY_TOKEN` 값 사용 (브라우저에 저장됨)
+- 새 기기 접속 시 페어링 승인 필요: `docker exec openclaw-openclaw-gateway-1 openclaw devices approve <requestId>`
 
-### GitHub Copilot 토큰 갱신
+### Cloudflare Tunnel
+
+- **터널명**: `openclaw-j` (ID: `ac436799-05e5-4919-af98-cd79de204181`)
+- **도메인**: `openclawj.bfreeai.us` → `localhost:18789`
+- **서비스**: systemd `cloudflared.service` (서버 재부팅 시 자동 시작)
+- **설정 파일**: `/etc/cloudflared/config.yml`
+- **인증서**: `/home/ubuntu/.cloudflared/cert.pem`
+
+```bash
+sudo systemctl status cloudflared    # 상태 확인
+sudo systemctl restart cloudflared   # 재시작
+```
+
+### OpenAI Codex OAuth 인증 (ChatGPT Plus)
+
+```bash
+# TTY 필요 — SSH 터미널에서 직접 실행
+docker exec -it openclaw-openclaw-gateway-1 openclaw onboard --auth-choice openai-codex --accept-risk
+
+# 토큰 확인
+docker exec openclaw-openclaw-gateway-1 cat /home/node/.openclaw/agents/main/agent/auth-profiles.json
+```
+
+- ChatGPT Plus 구독 할당량 사용
+- 브라우저 인증 필요 (VPS 환경에서는 URL 표시 → 로컬 브라우저에서 인증 → 리다이렉트 URL 붙여넣기)
+
+### GitHub Copilot 토큰 갱신 (폴백용)
 
 ```bash
 # TTY 필요 — SSH 터미널에서 직접 실행
@@ -381,3 +411,4 @@ Claude (opus-4.6, opus-4.5, sonnet-4.6, sonnet-4.5, sonnet-4, haiku-4.5), GPT (5
 | Node.js | v20.20.0 |
 | Docker | active |
 | 방화벽 | OCI Security List + iptables (22, 18789) |
+| Cloudflare Tunnel | `cloudflared.service` (openclawj.bfreeai.us → localhost:18789) |

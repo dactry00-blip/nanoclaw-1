@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-02-28 02:40 KST
+**최종 업데이트**: 2026-03-01 20:00 KST
 
 ## Known Issues
 
@@ -398,6 +398,21 @@ docker exec openclaw-openclaw-gateway-1 openclaw devices list
 docker exec openclaw-openclaw-gateway-1 openclaw devices approve <requestId>
 ```
 
+### 증상: Gateway token mismatch (onboard 후)
+
+- **원인**: `openclaw onboard` 실행 시 `openclaw.json`의 gateway 토큰이 변경되지만 `.env`의 `OPENCLAW_GATEWAY_TOKEN`은 그대로
+- **확인**: `docker logs openclaw-openclaw-gateway-1 | grep token_mismatch`
+- **해결**:
+  ```bash
+  # 1. openclaw.json의 토큰 확인
+  sudo python3 -c "import json; print(json.load(open('/home/ubuntu/.openclaw/openclaw.json'))['gateway']['auth']['token'])"
+
+  # 2. .env의 OPENCLAW_GATEWAY_TOKEN을 위 값으로 변경
+
+  # 3. 컨테이너 재생성
+  cd /home/ubuntu/openclaw && docker compose down && docker compose up -d
+  ```
+
 ### 증상: GitHub Copilot 토큰 sku=free_limited_copilot
 
 - Pro 구독 활성화 직후 토큰 갱신해도 반영 지연될 수 있음
@@ -421,6 +436,8 @@ sudo chmod -R 777 /home/ubuntu/.openclaw
 | `groupPolicy: allowlist`인데 guild 미등록 | 서버 채널 메시지 전부 무시 | `guilds`에 서버ID + 유저ID 등록 |
 | HTTP 외부 IP로 Control UI 접속 | "device identity" 에러 | SSH 터널로 localhost 접속 |
 | `chmod 777`로 디렉토리 권한 설정 | SecureClaw 감사 FAIL | `chown 1000:1000` + `chmod 700` 사용 |
+| `openclaw onboard`로 gateway 토큰 변경 후 `.env` 미갱신 | CLI↔Gateway token mismatch, 모든 CLI 명령 실패 | onboard 후 `openclaw.json`의 `gateway.auth.token`과 `.env`의 `OPENCLAW_GATEWAY_TOKEN` 일치시키고 `docker compose down && up -d` |
+| `openai-codex/gpt-4o` 모델 지정 | Unknown model 에러 (Codex OAuth에 gpt-4o 없음) | `openclaw models list --all`로 사용 가능 모델 확인 후 설정 |
 
 ## Session Transcript Branching
 
