@@ -1,10 +1,14 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-02-28 02:40 KST
+**최종 업데이트**: 2026-03-01 KST
 
 ## 환경 정보
 
 - **서버**: OCI (Oracle Cloud) Ubuntu 22.04 LTS
+- **인스턴스명**: `j-instance-20260217-1351`
+- **호스트명**: `j-instance-20260217-1351`
+- **리전**: `ap-singapore-2` (싱가포르)
+- **Shape**: `VM.Standard.A1.Flex` (ARM, 4 OCPU, 24GB RAM)
 - **프로젝트 경로**: `/home/ubuntu/nanoclaw`
 - **채널**: Slack (Socket Mode) + Discord (Gateway)
 - **어시스턴트 이름**: 폴
