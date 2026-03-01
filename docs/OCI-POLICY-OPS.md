@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-03-01 20:00 KST
+**최종 업데이트**: 2026-03-02 01:00 KST
 
 ## 환경 정보
 
@@ -10,9 +10,9 @@
 - **리전**: `ap-singapore-2` (싱가포르)
 - **Shape**: `VM.Standard.A1.Flex` (ARM, 4 OCPU, 24GB RAM)
 - **프로젝트 경로**: `/home/ubuntu/nanoclaw`
-- **채널**: Slack (Socket Mode) + Discord (Gateway)
-- **어시스턴트 이름**: 폴
-- **트리거 패턴**: `@폴` (멘션)
+- **채널**: Discord (Gateway) — Slack은 비활성화 (토큰 유출로 갱신 안 함)
+- **어시스턴트 이름**: J
+- **트리거 패턴**: `@J` (멘션)
 - **인증**: Claude Pro 구독 OAuth 토큰 (자동 갱신)
 - **프로세스 관리**: systemd (`nanoclaw.service`)
 
@@ -52,11 +52,12 @@ npm run build && node dist/index.js
 ANTHROPIC_API_KEY_FALLBACK=sk-ant-api03-...
 
 TZ=Asia/Seoul                    # 시간대 (호스트 + 컨테이너 모두 적용)
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
+# Slack은 비활성화 (토큰 유출로 갱신 안 함)
+#SLACK_BOT_TOKEN=xoxb-...
+#SLACK_APP_TOKEN=xapp-...
 DISCORD_BOT_TOKEN=MTQ3...      # Discord 봇 토큰 (없으면 Discord 비활성화)
-ASSISTANT_NAME=폴
-TRIGGER_PATTERN=^@폴
+ASSISTANT_NAME=J
+TRIGGER_PATTERN=^@J
 COPILOT_API_URL=http://localhost:4141  # copilot-api 프록시 (GitHub Copilot → OpenAI-compatible)
 COPILOT_MODEL=gpt-4o-mini             # Copilot API 모델명 (gpt-4o-mini, gpt-4.1, gpt-5-mini 등 선택 가능)
 COPILOT_API_KEY=dummy                 # copilot-api 프록시는 자체 인증, 값은 아무거나
@@ -76,7 +77,7 @@ THREADS_APP_SECRET=...         # Threads 앱 시크릿 (토큰 갱신용)
 - **Privileged Gateway Intents**: Message Content Intent 활성화 필수 (Discord Developer Portal)
 - **JID 형식**: `dc:<channelId>` (그룹 등록 시 이 형식 사용)
 - **봇 이름**: 나노봇 (Discord 서버 내 표시명)
-- **트리거**: `@나노봇` 멘션 → 자동으로 `@폴` 트리거로 변환
+- **트리거**: `@나노봇` 멘션 → 자동으로 `@J` 트리거로 변환
 
 ## 토큰 관리
 
@@ -367,6 +368,26 @@ docker exec -it openclaw-openclaw-gateway-1 openclaw models auth login-github-co
 # 토큰 확인
 docker exec openclaw-openclaw-gateway-1 cat /home/node/.openclaw/credentials/github-copilot.token.json
 ```
+
+### Meta SNS Manager API (Threads + Instagram)
+
+OpenClaw 전용 Meta 앱으로 Threads/Instagram API 연동.
+
+| 항목 | Threads | Instagram |
+|------|---------|-----------|
+| **앱 ID** | `901486605996246` | `4244425462496039` |
+| **User ID** | `25842836398677206` | `34086375891006594` |
+| **계정** | `@ai.bfree` | `@ai.bfree` |
+| **토큰 파일** | `~/.openclaw/threads/token-state.json` | `~/.openclaw/threads/instagram-token-state.json` |
+| **컨테이너 마운트** | `/home/node/.threads-token-state.json` (ro) | `/home/node/.instagram-token-state.json` (ro) |
+| **토큰 유효기간** | 60일 (장기 토큰) | 60일 (장기 토큰) |
+| **OAuth 리디렉트 URI** | `https://localhost/` | `https://localhost/` |
+
+3번째 이용사례 (콘텐츠 퍼가기/oEmbed)는 별도 토큰 불필요 (앱 ID + 시크릿으로 호출).
+
+**토큰 갱신**: 만료 전 수동 OAuth 플로우 필요 (자동 갱신 미구현).
+- Threads: `https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=<TOKEN>`
+- Instagram: `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=<TOKEN>`
 
 ### SecureClaw 보안 감사/강화
 

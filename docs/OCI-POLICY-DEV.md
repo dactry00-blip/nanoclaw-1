@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-02-28 02:40 KST
+**최종 업데이트**: 2026-03-02 01:00 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -42,7 +42,26 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
 - 죽은 프로세스의 stale lock은 자동 회수
 - 워커 컨테이너에는 영향 없음
 
-## 최근 변경사항 (2026-02-27)
+## 최근 변경사항 (2026-03-02)
+
+### NanoClaw 설정 변경
+- **어시스턴트 이름**: `폴` → `J` (`.env` `ASSISTANT_NAME=J`, `TRIGGER_PATTERN=^@J`)
+- **Slack 비활성화**: 토큰 유출로 갱신하지 않아 `invalid_auth` 크래시 발생. `.env`에서 `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` 주석 처리. Discord만 운영.
+
+### OpenClaw Meta SNS Manager API 연동
+- **Meta 앱**: SNS Manager API (Threads + Instagram + oEmbed 3개 이용사례)
+- **Threads API**: OAuth 플로우 → 단기 토큰 → 장기 토큰(60일) 교환 완료
+  - User ID: `25842836398677206`, 계정: `@ai.bfree`
+  - 토큰 상태 파일: `~/.openclaw/threads/token-state.json`
+  - 컨테이너 마운트: `/home/node/.threads-token-state.json` (ro)
+- **Instagram API**: OAuth 플로우 → 단기 토큰 → 장기 토큰(60일) 교환 완료
+  - User ID: `34086375891006594`, 계정: `@ai.bfree`
+  - 토큰 상태 파일: `~/.openclaw/threads/instagram-token-state.json`
+  - 컨테이너 마운트: `/home/node/.instagram-token-state.json` (ro)
+- **docker-compose.yml 수정**: `THREADS_USER_ID`, `INSTAGRAM_USER_ID` 환경변수 및 토큰 파일 볼륨 마운트 추가
+- NanoClaw 토큰 공유 방식에서 OpenClaw 독립 토큰으로 전환
+
+## 이전 변경사항 (2026-02-27)
 
 ### OpenClaw 14차원 Router 통합 — LIGHT/HEAVY 분기 및 Delegation Tool
 - **라우터 통합**: 메시지 복잡도를 14개 차원(토큰 수, 코드 존재, 추론 마커, 기술 용어 등)으로 분석하여 LIGHT(Copilot) 또는 HEAVY(Claude 컨테이너)로 분기

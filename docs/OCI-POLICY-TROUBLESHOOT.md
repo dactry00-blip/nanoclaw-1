@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-03-01 20:00 KST
+**최종 업데이트**: 2026-03-02 01:00 KST
 
 ## Known Issues
 
@@ -38,6 +38,12 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 - LIGHT 판정 시 `gpt-4o-mini` 등 Copilot 모델로 즉시 응답 활성화
 - **Copilot 프록시 다운 시**: 기존대로 Claude HEAVY fallthrough 동작 (안전)
 
+### 12. [FIXED] Slack invalid_auth로 전체 프로세스 크래시 (Discord 포함)
+NanoClaw에서 Slack Socket Mode 연결 시 `invalid_auth` 에러가 발생하면, Slack 연결 시도에서 예외가 throw되어 **전체 프로세스가 종료**됨. Discord 채널이 정상이어도 Slack 실패가 프로세스 전체를 죽임 (graceful degradation 없음). **Fix**: `.env`에서 `SLACK_BOT_TOKEN`과 `SLACK_APP_TOKEN`을 주석 처리하여 Slack 비활성화. 토큰 유출로 갱신하지 않으므로 당분간 Slack 비활성 유지.
+
+### 13. [FIXED] Instagram Webhooks 콜백 URL 검증 실패
+Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost/...`를 설정하면 Meta가 실시간 검증을 시도하여 실패함 (`#N/A:WBxP-791139048-3306044394`). **Fix**: Webhooks 설정은 비워두고 건너뜀. Webhooks는 Instagram 콘텐츠 발행에 필요하지 않음 (선택사항).
+
 ### 11. Delegation 30초 타임아웃
 - 컨테이너의 `delegate_to_cheap_model` MCP 도구가 `delegation_result.json`을 30초간 polling
 - 호스트 IPC 처리(`ipc.ts`)가 지연되면 타임아웃 발생 가능
@@ -57,6 +63,13 @@ IPC `send_message` 핸들러가 발신 `chatJid`(주로 Slack)에만 메시지�
 | Threads User Token Generator로 토큰 발급 | 1시간 후 만료, 장기 교환 불가 | 정식 OAuth 플로우(`scripts/threads-oauth.sh`) 사용 |
 | Threads 리다이렉트 URI 미등록 | OAuth 인증 시 "차단된 URL" 에러 | Meta 앱 설정에서 리다이렉트 URI 화이트리스트 등록 |
 | `앱ID\|시크릿해시` 형태 토큰 사용 | API 호출 불가 (앱 토큰 ≠ 사용자 토큰) | `THAASI...`로 시작하는 사용자 토큰 사용 |
+
+### 🔴 채널 연결 관련
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| Slack 토큰 유출 후 갱신 안 하고 `.env`에 남겨둠 | `invalid_auth`로 전체 프로세스 크래시 (Discord 포함) | 사용 안 하는 채널 토큰은 주석 처리 |
+| Instagram Webhooks에 `https://localhost/` 설정 | Meta 실시간 검증 실패 | Webhooks는 비워두고 건너뜀 (콘텐츠 발행에 불필요) |
+| Instagram OAuth redirect_uri 미등록 | "Invalid redirect_uri" 에러 | Meta 앱 설정 → Instagram API → 유효한 OAuth 리디렉션 URI에 `https://localhost/` 등록 |
 
 ### 🔴 컨테이너 관련
 | 실수 | 결과 | 올바른 방법 |
