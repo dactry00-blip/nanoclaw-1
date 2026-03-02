@@ -1,6 +1,6 @@
 # OCI 정책서 — 개발 정책
 
-**최종 업데이트**: 2026-03-02 01:00 KST
+**최종 업데이트**: 2026-03-02 11:00 KST
 
 이 문서는 전체 코드를 읽지 않고도 빠르게 작업할 수 있도록 핵심 구조와 흐름을 정리합니다.
 
@@ -60,6 +60,14 @@ User (Slack/Discord) → Channel → DB(storeMessage) → notifyNewMessage() [�
   - 컨테이너 마운트: `/home/node/.instagram-token-state.json` (ro)
 - **docker-compose.yml 수정**: `THREADS_USER_ID`, `INSTAGRAM_USER_ID` 환경변수 및 토큰 파일 볼륨 마운트 추가
 - NanoClaw 토큰 공유 방식에서 OpenClaw 독립 토큰으로 전환
+
+### OpenClaw Exec(Bash) 보안 설정
+- `tools.exec.security`를 `deny`(기본값)에서 `allowlist`로 변경
+- `tools.exec.host`를 `gateway`로 설정 (Docker 컨테이너가 이미 격리 레이어)
+- `safeBins`에 `curl`, `node`만 등록 — 에이전트가 Threads/Instagram API 직접 호출 가능
+- `safeBinProfiles`로 curl의 파일 쓰기 플래그(`-o`, `-O`, `-T`) 차단
+- sandbox(DinD) 대신 gateway 모드 선택 — DinD는 docker.sock 노출로 오히려 위험
+- ClawHub에 Threads 전용 스킬(publora-threads, yarn-threads-cli)이 있으나 모두 SaaS 중개/브라우저 자동화 → 직접 API 호출이 더 적합
 
 ## 이전 변경사항 (2026-02-27)
 

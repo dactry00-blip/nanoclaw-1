@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-03-02 01:00 KST
+**최종 업데이트**: 2026-03-02 11:00 KST
 
 ## Known Issues
 
@@ -63,6 +63,14 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
 | Threads User Token Generator로 토큰 발급 | 1시간 후 만료, 장기 교환 불가 | 정식 OAuth 플로우(`scripts/threads-oauth.sh`) 사용 |
 | Threads 리다이렉트 URI 미등록 | OAuth 인증 시 "차단된 URL" 에러 | Meta 앱 설정에서 리다이렉트 URI 화이트리스트 등록 |
 | `앱ID\|시크릿해시` 형태 토큰 사용 | API 호출 불가 (앱 토큰 ≠ 사용자 토큰) | `THAASI...`로 시작하는 사용자 토큰 사용 |
+
+### 🔴 Exec/Bash 보안 관련
+| 실수 | 결과 | 올바른 방법 |
+|------|------|------------|
+| `tools.exec.security=full` 설정 | 에이전트가 모든 명령 실행 가능 (rm, wget 등) | `allowlist` + `safeBins`로 curl/node만 허용 |
+| sandbox(DinD) 사용 시 docker.sock 마운트 | 에이전트가 호스트 Docker 제어 → 사실상 root | 이미 Docker 안이면 `host=gateway` 사용 |
+| `safeBinTrustedDirs`에 `/tmp` 포함 | trojan 바이너리 실행 위험 | `/usr/bin`, `/usr/local/bin`만 등록 |
+| curl에 `-o`/`-O` 플래그 허용 | 에이전트가 임의 파일 다운로드/덮어쓰기 가능 | `safeBinProfiles.curl.deniedFlags`로 차단 |
 
 ### 🔴 채널 연결 관련
 | 실수 | 결과 | 올바른 방법 |

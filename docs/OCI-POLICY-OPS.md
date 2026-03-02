@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-03-02 01:00 KST
+**최종 업데이트**: 2026-03-02 11:00 KST
 
 ## 환경 정보
 
@@ -388,6 +388,37 @@ OpenClaw 전용 Meta 앱으로 Threads/Instagram API 연동.
 **토큰 갱신**: 만료 전 수동 OAuth 플로우 필요 (자동 갱신 미구현).
 - Threads: `https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=<TOKEN>`
 - Instagram: `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=<TOKEN>`
+
+### Exec (Bash/Shell) 보안 설정
+
+에이전트가 `curl`/`node`로 Threads/Instagram API를 직접 호출할 수 있도록 exec 도구 활성화.
+Docker 컨테이너가 이미 1차 격리 레이어이므로 sandbox(DinD) 대신 gateway 모드 사용.
+
+```json
+{
+  "tools.exec.host": "gateway",
+  "tools.exec.security": "allowlist",
+  "tools.exec.ask": "on-miss",
+  "tools.exec.safeBins": ["curl", "node"],
+  "tools.exec.safeBinTrustedDirs": ["/usr/bin", "/usr/local/bin"],
+  "tools.exec.safeBinProfiles": {
+    "curl": { "deniedFlags": ["-o", "--output", "-O", "--remote-name", "-T", "--upload-file"] },
+    "node": { "deniedFlags": ["--eval-file"] }
+  }
+}
+```
+
+**보안 레이어:**
+1. Docker 컨테이너 격리 (호스트 접근 불가)
+2. `security=allowlist` (curl, node만 허용, rm/wget/ssh 등 차단)
+3. `safeBinProfiles` (curl의 파일 쓰기 플래그 차단: `-o`, `-O`, `-T`)
+4. `ask=on-miss` (첫 실행 시 Discord 승인 요청)
+5. `safeBinTrustedDirs` (/usr/bin, /usr/local/bin의 바이너리만 신뢰)
+
+**⚠️ 주의:**
+- `security=full` 사용 금지 — 모든 명령 허용됨
+- sandbox(DinD)는 docker.sock 마운트 필요 → 오히려 호스트 root 노출 위험
+- `jq`는 컨테이너에 없으므로 JSON 파싱은 `node -e` 사용
 
 ### SecureClaw 보안 감사/강화
 
