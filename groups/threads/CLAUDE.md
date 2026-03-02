@@ -23,28 +23,36 @@ RESPONSE=$(curl -s -X POST "https://graph.threads.net/v1.0/$THREADS_USER_ID/thre
   -d "media_type=TEXT" \
   -d "text=여기에 글 내용" \
   -d "access_token=$THREADS_ACCESS_TOKEN")
-CREATION_ID=$(echo "$RESPONSE" | jq -r '.id')
+CREATION_ID=$(echo "$RESPONSE" | node -e 'var d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).id))')
+
+if [ -z "$CREATION_ID" ]; then echo "ERROR: CREATION_ID empty. Response: $RESPONSE"; exit 1; fi
 
 # Step 2: Publish
 curl -s -X POST "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads_publish" \
   -d "creation_id=$CREATION_ID" \
-  -d "access_token=$THREADS_ACCESS_TOKEN" | jq .
+  -d "access_token=$THREADS_ACCESS_TOKEN" \
+  | node -e 'var d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.stringify(JSON.parse(d),null,2)))'
 ```
+
+> **따옴표 규칙**: `node -e` 바깥은 작은따옴표(`'`), 안쪽 문자열은 큰따옴표(`"`)를 사용. 이렇게 하면 쉘이 작은따옴표 안의 내용을 해석하지 않아서 이스케이핑 문제가 없음.
 
 ### 조회
 
 ```bash
-curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=text,timestamp&limit=5&access_token=$THREADS_ACCESS_TOKEN" | jq .
+curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=text,timestamp&limit=5&access_token=$THREADS_ACCESS_TOKEN" \
+  | node -e 'var d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.stringify(JSON.parse(d),null,2)))'
 ```
 
 ### 인사이트 조회
 
 ```bash
 # 게시물 인사이트 조회
-curl -s "https://graph.threads.net/v1.0/{post_id}/insights?metric=views,likes,replies,reposts,quotes&access_token=$THREADS_ACCESS_TOKEN" | jq .
+curl -s "https://graph.threads.net/v1.0/{post_id}/insights?metric=views,likes,replies,reposts,quotes&access_token=$THREADS_ACCESS_TOKEN" \
+  | node -e 'var d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.stringify(JSON.parse(d),null,2)))'
 
 # 최근 게시물 목록 + 타임스탬프
-curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=id,text,timestamp&limit=25&access_token=$THREADS_ACCESS_TOKEN" | jq .
+curl -s "https://graph.threads.net/v1.0/$THREADS_USER_ID/threads?fields=id,text,timestamp&limit=25&access_token=$THREADS_ACCESS_TOKEN" \
+  | node -e 'var d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.stringify(JSON.parse(d),null,2)))'
 ```
 
 ---
