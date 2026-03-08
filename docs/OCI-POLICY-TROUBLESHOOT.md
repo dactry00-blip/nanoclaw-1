@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-03-02 11:00 KST
+**최종 업데이트**: 2026-03-08 22:00 KST
 
 ## Known Issues
 
@@ -57,6 +57,24 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
   5. WARP 관련 네트워크 설정 정리 (resolv.conf, systemd-resolved 등)
   6. 볼륨 분리 → 원래 인스턴스에 부트 볼륨 재연결 → 정상 부팅
 - **교훈**: WARP/VPN 류 소프트웨어는 네트워크 스택 전체를 변경하므로, 서버에 설치 시 SSH 접속 불가 위험. 테스트 후 즉시 제거하거나 설치 전 스냅샷 필수.
+
+### 15. [FIXED] OpenClaw Codex OAuth 응답 실패 (chatgpt.com 차단)
+
+- **날짜**: 2026-03-08
+- **증상**: OpenClaw에서 OpenAI Codex (ChatGPT Plus OAuth) 모델 사용 시 응답 없음
+- **원인 분석**:
+  - OpenClaw embedded 모드는 `chatgpt.com/backend-api`를 baseUrl로 사용
+  - OCI 데이터센터 IP에서 `chatgpt.com`, `auth0.openai.com`은 Cloudflare JS Challenge로 차단 (403)
+  - 실제 에러는 `400 invalid_request_body` (요청이 도달은 하지만 형식 오류)
+  - `api.openai.com`은 정상 접근 가능 (차단 없음)
+- **시도했으나 실패한 방법**:
+  - Cloudflare WARP 프록시 모드 (SOCKS5 localhost:1080) → WARP IP도 봇 트래픽으로 분류되어 여전히 403
+  - Codex CLI (`@openai/codex`) 글로벌 설치 → `api.openai.com/v1/responses`를 사용하므로 동작하지만, OpenClaw과 별개
+- **해결**: `openclaw onboard --auth-choice openai-codex --accept-risk` 실행으로 Codex OAuth 재인증
+  - 온보딩이 Device Code Flow로 브라우저 인증 → 토큰 발급/갱신 처리
+  - 온보딩 후 Codex 응답 정상 확인
+- **정리**: WARP (패키지, apt repo, GPG 키), Codex CLI (`@openai/codex` npm global) 모두 제거
+- **교훈**: 수동 설치/우회 시도 전에 OpenClaw 자체 온보딩 먼저 시도. WARP 프록시는 chatgpt.com 차단 우회에 효과 없음.
 
 ### 11. Delegation 30초 타임아웃
 - 컨테이너의 `delegate_to_cheap_model` MCP 도구가 `delegation_result.json`을 30초간 polling
@@ -479,6 +497,9 @@ sudo chmod -R 777 /home/ubuntu/.openclaw
 | `chmod 777`로 디렉토리 권한 설정 | SecureClaw 감사 FAIL | `chown 1000:1000` + `chmod 700` 사용 |
 | `openclaw onboard`로 gateway 토큰 변경 후 `.env` 미갱신 | CLI↔Gateway token mismatch, 모든 CLI 명령 실패 | onboard 후 `openclaw.json`의 `gateway.auth.token`과 `.env`의 `OPENCLAW_GATEWAY_TOKEN` 일치시키고 `docker compose down && up -d` |
 | `openai-codex/gpt-4o` 모델 지정 | Unknown model 에러 (Codex OAuth에 gpt-4o 없음) | `openclaw models list --all`로 사용 가능 모델 확인 후 설정 |
+| Codex 응답 안 될 때 WARP 프록시 설치 | WARP IP도 chatgpt.com에서 차단, SSH 장애 위험 | `openclaw onboard --auth-choice openai-codex --accept-risk`로 재인증 |
+| Codex CLI (`@openai/codex`) 수동 설치 | OpenClaw과 별개 동작, 불필요한 의존성 | OpenClaw 온보딩으로 해결 (별도 CLI 불필요) |
+| `chatgpt.com/backend-api` 직접 curl 테스트 | Cloudflare JS Challenge로 403 (데이터센터 IP) | `api.openai.com`은 접근 가능, 하지만 OpenClaw 내부 처리에 맡길 것 |
 
 ## Session Transcript Branching
 
@@ -515,7 +536,7 @@ hostname: nanoclaw-instance-20260217-1351
 - docker0: 172.17.0.1/16
 
 SSH: active (running), port 22, enabled
-WARP: 미설치 (dpkg -l | grep warp → 결과 없음)
+WARP: 미설치 (제거 완료, dpkg -l | grep warp → 결과 없음)
 SSH key: ssh-key-2026-02-17 (RSA)
 ```
 

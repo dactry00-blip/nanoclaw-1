@@ -1,12 +1,12 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-03-02 11:00 KST
+**최종 업데이트**: 2026-03-08 22:00 KST
 
 ## 환경 정보
 
 - **서버**: OCI (Oracle Cloud) Ubuntu 22.04 LTS
-- **인스턴스명**: `j-instance-20260217-1351`
-- **호스트명**: `j-instance-20260217-1351`
+- **인스턴스명**: `nanoclaw-instance-20260217-1351`
+- **호스트명**: `nanoclaw-instance-20260217-1351`
 - **리전**: `ap-singapore-2` (싱가포르)
 - **Shape**: `VM.Standard.A1.Flex` (ARM, 4 OCPU, 24GB RAM)
 - **프로젝트 경로**: `/home/ubuntu/nanoclaw`
@@ -358,6 +358,9 @@ docker exec openclaw-openclaw-gateway-1 cat /home/node/.openclaw/agents/main/age
 
 - ChatGPT Plus 구독 할당량 사용
 - 브라우저 인증 필요 (VPS 환경에서는 URL 표시 → 로컬 브라우저에서 인증 → 리다이렉트 URL 붙여넣기)
+- **응답 안 될 때**: `openclaw onboard --auth-choice openai-codex --accept-risk`로 재인증이 첫 번째 시도
+- **⚠️ WARP/VPN 불필요**: OCI 데이터센터 IP에서 `chatgpt.com`이 Cloudflare 차단되지만, WARP 프록시로 우회 불가 (WARP IP도 차단). OpenClaw 온보딩이 자체적으로 인증 처리함
+- **⚠️ Codex CLI 별도 설치 불필요**: `@openai/codex` npm 패키지는 OpenClaw과 별개 동작. OpenClaw 온보딩만으로 충분
 
 ### GitHub Copilot 토큰 갱신 (폴백용)
 
