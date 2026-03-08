@@ -527,7 +527,7 @@ for i, line in enumerate(lines):
 정상 상태 기준. 장애 복구 후 비교용.
 
 ```
-hostname: nanoclaw-instance-20260217-1351
+hostname: j-instance-20260217-1351
 
 네트워크 인터페이스:
 - lo: 127.0.0.1/8
