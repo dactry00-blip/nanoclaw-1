@@ -110,7 +110,10 @@ export async function callCopilotAPI(prompt: string): Promise<string> {
     headers,
     body: JSON.stringify({
       model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: 'You are 폴, a personal assistant. Respond in the same language as the user. Messages are sent directly to you — do not treat them as third-party conversations.' },
+        { role: 'user', content: prompt },
+      ],
       max_tokens: 4096,
     }),
   });
