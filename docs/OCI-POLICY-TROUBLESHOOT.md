@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-03-08 22:00 KST
+**최종 업데이트**: 2026-03-10 00:30 KST
 
 ## Known Issues
 
@@ -500,6 +500,9 @@ sudo chmod -R 777 /home/ubuntu/.openclaw
 | Codex 응답 안 될 때 WARP 프록시 설치 | WARP IP도 chatgpt.com에서 차단, SSH 장애 위험 | `openclaw onboard --auth-choice openai-codex --accept-risk`로 재인증 |
 | Codex CLI (`@openai/codex`) 수동 설치 | OpenClaw과 별개 동작, 불필요한 의존성 | OpenClaw 온보딩으로 해결 (별도 CLI 불필요) |
 | `chatgpt.com/backend-api` 직접 curl 테스트 | Cloudflare JS Challenge로 403 (데이터센터 IP) | `api.openai.com`은 접근 가능, 하지만 OpenClaw 내부 처리에 맡길 것 |
+| `tools.profile: "messaging"` 설정 | 에이전트가 exec/read/write/web_search 도구 사용 불가 → Threads API 호출, 웹 검색 불가능 | `tools.profile: "coding"` 사용. messaging은 message/sessions만 제공 |
+| 에이전트 세션 캐시로 설정 변경 미반영 | 모델/프로필 변경 후에도 이전 설정으로 동작 | 세션 파일 삭제 후 재시작: `rm /home/node/.openclaw/agents/<id>/sessions/*.jsonl && echo "{}" > sessions.json` |
+| editor-threads 에이전트가 gpt-5-mini로 폴백 | Codex OAuth 인증이 세션 캐시에 묶여 폴백 모델 사용 | 세션 전체 초기화 (jsonl + sessions.json) 후 새 세션 생성 시 올바른 모델로 연결 |
 
 ## Session Transcript Branching
 
