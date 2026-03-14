@@ -1,6 +1,6 @@
 # OCI 정책서 — 운영 정책
 
-**최종 업데이트**: 2026-03-10 23:06 KST
+**최종 업데이트**: 2026-03-14 KST
 
 ## 환경 정보
 
@@ -461,6 +461,7 @@ Claude (opus-4.6, opus-4.5, sonnet-4.6, sonnet-4.5, sonnet-4, haiku-4.5), GPT (5
 - NanoClaw와 **포트 충돌 없음** (NanoClaw는 포트 미사용, Socket Mode)
 - OpenClaw 게이트웨이는 **RAM ~1.5GB** 사용 (서버 23GB 중)
 - 컨테이너 내부 uid=1000(node), 호스트 uid=1001 → 권한 문제 시 `sudo chown -R 1000:1000 ~/.openclaw`
+- **git safe.directory**: `~/.openclaw/.node-gitconfig`이 `/home/node/.gitconfig`로 볼륨 마운트됨. 컨테이너 내 에이전트가 git commit/push 가능. 재빌드 시에도 유지됨
 - `openclaw.json`에 OpenClaw 스키마에 없는 키 추가 시 게이트웨이 시작 실패
 - OCI Security List에서 포트 18789 인바운드 허용됨
 - iptables에 18789 허용 규칙 추가됨 (`/etc/iptables/rules.v4`에 저장)

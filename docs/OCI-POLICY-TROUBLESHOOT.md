@@ -1,6 +1,6 @@
 # OCI 정책서 — 트러블슈팅 정책
 
-**최종 업데이트**: 2026-03-10 23:06 KST
+**최종 업데이트**: 2026-03-14 KST
 
 ## Known Issues
 
@@ -76,6 +76,17 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
 - **정리**: WARP (패키지, apt repo, GPG 키), Codex CLI (`@openai/codex` npm global) 모두 제거
 - **교훈**: 수동 설치/우회 시도 전에 OpenClaw 자체 온보딩 먼저 시도. WARP 프록시는 chatgpt.com 차단 우회에 효과 없음.
 
+### 16. [FIXED] OpenClaw 컨테이너 내 git dubious ownership 에러
+
+- **날짜**: 2026-03-14
+- **증상**: OpenClaw 에이전트가 컨테이너 내 `/home/node/.openclaw`에서 git commit/push 실행 시 `fatal: detected dubious ownership in repository` 에러로 거부됨
+- **원인**: 호스트(uid 1001)에서 생성된 파일이 bind mount로 컨테이너에 들어오면서 node(uid 1000)와 소유권 불일치. Git이 보안상 다른 사용자 소유 디렉토리에서의 작업을 차단
+- **해결**:
+  1. 호스트에서 소유권 변경: `sudo chown -R 1000:1000 /home/ubuntu/.openclaw/`
+  2. 컨테이너 내 git safe.directory 등록: `/home/node/.gitconfig`에 `safe.directory = /home/node/.openclaw` 추가
+  3. 영구 설정: 호스트에 `/home/ubuntu/.openclaw/.node-gitconfig` 파일 생성 → `docker-compose.yml`에 볼륨 마운트 (`/home/node/.gitconfig`)로 컨테이너 재생성 시에도 유지
+- **교훈**: bind mount 디렉토리의 uid 불일치는 git에서 dubious ownership 에러를 유발. `safe.directory` 등록 또는 `chown`으로 해결하되, 컨테이너 재생성에 대비해 `.gitconfig`를 볼륨 마운트로 영구화
+
 ### 11. Delegation 30초 타임아웃
 - 컨테이너의 `delegate_to_cheap_model` MCP 도구가 `delegation_result.json`을 30초간 polling
 - 호스트 IPC 처리(`ipc.ts`)가 지연되면 타임아웃 발생 가능
@@ -123,6 +134,7 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
 | `.claude.json` 미마운트 | CLI exit 0, 메시지 0개, 에러 없음 | 반드시 마운트 + 쓰기 가능 확인 |
 | credentials.json 미복사 | 인증 실패 | 컨테이너 `/home/node/.claude/`에 복사 |
 | UID 불일치 (host 1001, container 1000) | EACCES permission denied | `sudo chmod -R 777 data/sessions/` |
+| bind mount 디렉토리에서 git 실행 | `dubious ownership` 에러 | `chown -R 1000:1000` + `.gitconfig`에 `safe.directory` 등록 + 볼륨 마운트로 영구화 |
 
 ### 🔴 시간대/스케줄 관련
 | 실수 | 결과 | 올바른 방법 |
