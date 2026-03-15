@@ -140,6 +140,9 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
 | 컨테이너에 git user/credential 미설정 | 에이전트가 `git push` 불가 (permission denied) | `~/.openclaw/.node-gitconfig`에 `[user]` + `[credential "https://github.com"]` 설정 (볼륨 마운트로 영구 유지) |
 | upstream 레포에 직접 push 시도 | `Permission denied` (403) | 포크 생성 후 `origin`=포크, `upstream`=원본으로 remote 분리 |
 | 스킬 활성화 후 기존 세션에서 안 보임 | `<available_skills>` 블록이 세션 시작 시점에 고정 | `sessions.json`에서 해당 세션의 `systemSent`를 `false`로 리셋 |
+| `openclaw.json`에 `browser` 설정 블록 없이 `tools.alsoAllow`에 `browser`만 추가 | browser 컨트롤 서비스 타임아웃 (15초) | `browser.headless`, `browser.executablePath`, `browser.extraArgs` 설정 필수 |
+| ARM64에서 Playwright 풀 Chromium(`chrome`) 사용 | crashpad core dump 크래시 | `headless_shell` 바이너리 사용 (`chromium_headless_shell-*/chrome-linux/headless_shell`) |
+| `openclaw.json`을 pipe(`\|`)로 수정 시 실패하면 파일 truncate | 설정 전체 소실, 게이트웨이 시작 불가 | 임시 파일에 먼저 쓰고 검증 후 복사 (`python3 ... > /tmp/new.json && cp /tmp/new.json target`) |
 
 ### 🔴 시간대/스케줄 관련
 | 실수 | 결과 | 올바른 방법 |
