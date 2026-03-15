@@ -462,6 +462,11 @@ Claude (opus-4.6, opus-4.5, sonnet-4.6, sonnet-4.5, sonnet-4, haiku-4.5), GPT (5
 - OpenClaw 게이트웨이는 **RAM ~1.5GB** 사용 (서버 23GB 중)
 - 컨테이너 내부 uid=1000(node), 호스트 uid=1001 → 권한 문제 시 `sudo chown -R 1000:1000 ~/.openclaw`
 - **git safe.directory**: `~/.openclaw/.node-gitconfig`이 `/home/node/.gitconfig`로 볼륨 마운트됨. 컨테이너 내 에이전트가 git commit/push 가능. 재빌드 시에도 유지됨
+- **Git 인증**: `.node-gitconfig`에 `[user]`(name/email) + `[credential "https://github.com"]`(PAT helper) 설정됨. 호스트 Claude Code와 컨테이너 에이전트 모두 push 가능
+- **GitHub 레포 구조**: `origin`=포크(`dactry00-blip/openclaw`), `upstream`=원본(`openclaw/openclaw`). push는 포크로, 업그레이드는 `git fetch upstream && git rebase upstream/main`
+- **이미지 재빌드 시 보존**: `.env`에 `OPENCLAW_INSTALL_BROWSER=1`, `OPENCLAW_DOCKER_APT_PACKAGES=python3-pip` 설정. `docker-setup.sh`가 이 값을 build arg로 전달하여 Chromium, pip 등이 자동 설치됨
+- **날라가지 않는 것**: 볼륨 마운트 파일(스킬, 에이전트 설정, 세션, gog 바이너리/config, `.node-gitconfig`), Dockerfile 빌트인 스킬(`/app/skills/`), `.env`의 build arg로 설치되는 패키지(Chromium, python3-pip, pandas, pyarrow)
+- **`docker commit` 주의**: 임시 보존용으로만 사용. 업그레이드 시 이미지가 재빌드되면 커밋 내용 소실. 영구 보존은 반드시 Dockerfile build arg 또는 볼륨 마운트 사용
 - `openclaw.json`에 OpenClaw 스키마에 없는 키 추가 시 게이트웨이 시작 실패
 - OCI Security List에서 포트 18789 인바운드 허용됨
 - iptables에 18789 허용 규칙 추가됨 (`/etc/iptables/rules.v4`에 저장)

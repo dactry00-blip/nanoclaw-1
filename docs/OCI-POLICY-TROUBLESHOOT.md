@@ -135,6 +135,11 @@ Meta Developer Console에서 Instagram Webhooks 콜백 URL로 `https://localhost
 | credentials.json 미복사 | 인증 실패 | 컨테이너 `/home/node/.claude/`에 복사 |
 | UID 불일치 (host 1001, container 1000) | EACCES permission denied | `sudo chmod -R 777 data/sessions/` |
 | bind mount 디렉토리에서 git 실행 | `dubious ownership` 에러 | `chown -R 1000:1000` + `.gitconfig`에 `safe.directory` 등록 + 볼륨 마운트로 영구화 |
+| `docker commit`만으로 변경 보존 시도 | 업그레이드(`git pull` + 재빌드) 시 커밋된 이미지 덮어쓰여 전부 소실 | Dockerfile build arg 사용: `.env`에 `OPENCLAW_INSTALL_BROWSER=1`, `OPENCLAW_DOCKER_APT_PACKAGES=python3-pip` 설정 + `docker-setup.sh`에 해당 arg 전달 |
+| 컨테이너 내 apt/pip 패키지 수동 설치 후 방치 | 컨테이너 재생성 시 소실 | Dockerfile의 `OPENCLAW_DOCKER_APT_PACKAGES` build arg 또는 pip install 라인에 추가하여 빌드 시 자동 포함 |
+| 컨테이너에 git user/credential 미설정 | 에이전트가 `git push` 불가 (permission denied) | `~/.openclaw/.node-gitconfig`에 `[user]` + `[credential "https://github.com"]` 설정 (볼륨 마운트로 영구 유지) |
+| upstream 레포에 직접 push 시도 | `Permission denied` (403) | 포크 생성 후 `origin`=포크, `upstream`=원본으로 remote 분리 |
+| 스킬 활성화 후 기존 세션에서 안 보임 | `<available_skills>` 블록이 세션 시작 시점에 고정 | `sessions.json`에서 해당 세션의 `systemSent`를 `false`로 리셋 |
 
 ### 🔴 시간대/스케줄 관련
 | 실수 | 결과 | 올바른 방법 |
